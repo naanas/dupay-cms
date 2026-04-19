@@ -17,7 +17,7 @@ export default function MerchantsPage() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [viewData, setViewData] = useState<any | null>(null);
 
-    // FORM PASTI 5 FIELD
+    // FORM PASTI 6 FIELD SEKARANG
     const [formData, setFormData] = useState({
         name: '', email: '', phone: '', pic_name: '', webhook_url: '', whitelisted_ips: ''
     });
@@ -45,7 +45,7 @@ export default function MerchantsPage() {
             email: merchant.email,
             phone: merchant.phone || '',
             pic_name: merchant.pic_name || '',
-            webhook_url: m.webhook_url || '',
+            webhook_url: merchant.webhook_url || '', // FIXED TYPO DISINI
             whitelisted_ips: merchant.whitelisted_ips || ''
         });
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -70,7 +70,7 @@ export default function MerchantsPage() {
             } else {
                 await api.fetchCMS('/merchants', 'POST', formData);
             }
-            setFormData({ name: '', email: '', phone: '', pic_name: '', whitelisted_ips: '' });
+            setFormData({ name: '', email: '', phone: '', pic_name: '', webhook_url: '', whitelisted_ips: '' });
             loadMerchants();
         } catch (err: any) {
             alert(err.message);
@@ -93,14 +93,14 @@ export default function MerchantsPage() {
                 </div>
             </div>
 
-            {/* FORM: 5 INPUTS LENGKAP */}
+            {/* FORM: 6 INPUTS LENGKAP */}
             <div className={`p-6 md:p-8 rounded-2xl shadow-sm border transition-all ${editingId ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}>
                 <div className="flex items-center justify-between mb-4">
                     <h2 className={`font-bold ${editingId ? 'text-amber-800' : 'text-slate-800'}`}>
                         {editingId ? 'Edit Merchant Data' : 'Register New Merchant'}
                     </h2>
                     {editingId && (
-                        <button onClick={() => { setEditingId(null); setFormData({ name: '', email: '', phone: '', pic_name: '', whitelisted_ips: '' }) }} className="text-sm text-amber-600 hover:underline">
+                        <button onClick={() => { setEditingId(null); setFormData({ name: '', email: '', phone: '', pic_name: '', webhook_url: '', whitelisted_ips: '' }) }} className="text-sm text-amber-600 hover:underline">
                             Batal Edit
                         </button>
                     )}
@@ -123,6 +123,11 @@ export default function MerchantsPage() {
                         <div className="space-y-4">
                             <input className="w-full border p-3 rounded-xl text-sm outline-none"
                                 placeholder="Nama PIC (Owner/Admin)" value={formData.pic_name} onChange={e => setFormData({ ...formData, pic_name: e.target.value })} />
+
+                            {/* INPUT WEBHOOK URL DITAMBAHKAN DISINI */}
+                            <input className="w-full border p-3 rounded-xl text-sm outline-none"
+                                placeholder="Webhook URL (Optional)" value={formData.webhook_url} onChange={e => setFormData({ ...formData, webhook_url: e.target.value })} />
+
                             <input className="w-full border p-3 rounded-xl text-sm outline-none"
                                 placeholder="IP Whitelist (Pisahkan dgn koma)" value={formData.whitelisted_ips} onChange={e => setFormData({ ...formData, whitelisted_ips: e.target.value })} />
 
@@ -250,6 +255,8 @@ export default function MerchantsPage() {
                             <div className="grid grid-cols-3 border-b pb-2"><span className="text-slate-500">PIC</span> <span className="col-span-2">{viewData.pic_name || '-'}</span></div>
                             <div className="grid grid-cols-3 border-b pb-2"><span className="text-slate-500">Email</span> <span className="col-span-2">{viewData.email}</span></div>
                             <div className="grid grid-cols-3 border-b pb-2"><span className="text-slate-500">Phone</span> <span className="col-span-2">{viewData.phone || '-'}</span></div>
+                            {/* BARIS WEBHOOK URL DITAMBAHKAN DISINI */}
+                            <div className="grid grid-cols-3 border-b pb-2"><span className="text-slate-500">Webhook URL</span> <span className="col-span-2 font-mono text-blue-600 break-all">{viewData.webhook_url || 'Belum diset'}</span></div>
                             <div className="grid grid-cols-3 border-b pb-2"><span className="text-slate-500">IP Whitelist</span> <span className="col-span-2 font-mono">{viewData.whitelisted_ips || 'Kosong (Akses Publik)'}</span></div>
 
                             <div className="mt-6 p-4 bg-slate-50 rounded-xl space-y-3">
