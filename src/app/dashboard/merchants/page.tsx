@@ -19,7 +19,7 @@ export default function MerchantsPage() {
 
     // FORM PASTI 5 FIELD
     const [formData, setFormData] = useState({
-        name: '', email: '', phone: '', pic_name: '', whitelisted_ips: ''
+        name: '', email: '', phone: '', pic_name: '', webhook_url: '', whitelisted_ips: ''
     });
 
     const loadMerchants = async () => {
@@ -45,6 +45,7 @@ export default function MerchantsPage() {
             email: merchant.email,
             phone: merchant.phone || '',
             pic_name: merchant.pic_name || '',
+            webhook_url: m.webhook_url || '',
             whitelisted_ips: merchant.whitelisted_ips || ''
         });
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -108,6 +109,7 @@ export default function MerchantsPage() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Kolom 1 */}
+
                         <div className="space-y-4">
                             <input required className="w-full border p-3 rounded-xl text-sm outline-none"
                                 placeholder="Nama Bisnis *" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
@@ -115,6 +117,7 @@ export default function MerchantsPage() {
                                 placeholder="Email Operasional *" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
                             <input className="w-full border p-3 rounded-xl text-sm outline-none"
                                 placeholder="Nomor Telepon (Phone)" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
+
                         </div>
                         {/* Kolom 2 */}
                         <div className="space-y-4">
@@ -129,6 +132,7 @@ export default function MerchantsPage() {
                             </button>
                         </div>
                     </div>
+
                 </form>
             </div>
 
