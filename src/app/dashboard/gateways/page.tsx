@@ -16,7 +16,7 @@ export default function GatewaysPage() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [viewData, setViewData] = useState<any | null>(null);
 
-    // STATE FORM UPDATE: Tambah merchant_code & private_key
+    // STATE FORM UPDATE: Tambah response_mapping
     const [formData, setFormData] = useState({
         name: '',
         base_url: '',
@@ -24,9 +24,10 @@ export default function GatewaysPage() {
         auth_type: 'BASIC_AUTH',
         custom_auth_header: '',
         server_key: '',
-        merchant_code: '', // BARU
-        private_key: '',   // BARU
+        merchant_code: '',
+        private_key: '',
         request_template: '{}',
+        response_mapping: '{}', // BARU
         webhook_mapping: '{}',
         webhook_secret: '',
         is_active: true
@@ -56,7 +57,7 @@ export default function GatewaysPage() {
             setFormData({
                 name: '', base_url: '', charge_endpoint: '', auth_type: 'BASIC_AUTH',
                 custom_auth_header: '', server_key: '', merchant_code: '', private_key: '',
-                request_template: '{}', webhook_mapping: '{}', webhook_secret: '', is_active: true
+                request_template: '{}', response_mapping: '{}', webhook_mapping: '{}', webhook_secret: '', is_active: true
             });
             loadGateways();
         } catch (err: any) { alert(err.message); } finally { setSubmitting(false); }
@@ -108,7 +109,7 @@ export default function GatewaysPage() {
                     {editingId && (
                         <button onClick={() => {
                             setEditingId(null);
-                            setFormData({ name: '', base_url: '', charge_endpoint: '', auth_type: 'BASIC_AUTH', custom_auth_header: '', server_key: '', merchant_code: '', private_key: '', request_template: '{}', webhook_mapping: '{}', webhook_secret: '', is_active: true });
+                            setFormData({ name: '', base_url: '', charge_endpoint: '', auth_type: 'BASIC_AUTH', custom_auth_header: '', server_key: '', merchant_code: '', private_key: '', request_template: '{}', response_mapping: '{}', webhook_mapping: '{}', webhook_secret: '', is_active: true });
                         }} className="text-sm font-bold text-blue-600 hover:underline">
                             Batal Edit
                         </button>
@@ -138,9 +139,19 @@ export default function GatewaysPage() {
                                     <option value="BASIC_AUTH">Basic Auth</option>
                                     <option value="BEARER_TOKEN">Bearer Token</option>
                                     <option value="CUSTOM_HEADER">Custom Header</option>
+                                    <option value="TRIPAY_HMAC">Tripay HMAC</option>
+                                    <option value="IPAYMU_V2">iPaymu Signature V2</option>
                                 </select>
                             </div>
                         </div>
+
+                        {/* INPUT CUSTOM HEADER (MUNCUL KALAU DIPILIH) */}
+                        {formData.auth_type === 'CUSTOM_HEADER' && (
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Custom Auth Header Name</label>
+                                <input required className="w-full border p-3 rounded-xl mt-1.5 outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. va atau signature" value={formData.custom_auth_header} onChange={e => setFormData({ ...formData, custom_auth_header: e.target.value })} />
+                            </div>
+                        )}
 
                         {/* BOX CREDENTIALS KHUSUS */}
                         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4 mt-2">
@@ -169,11 +180,16 @@ export default function GatewaysPage() {
                     <div className="space-y-4">
                         <div>
                             <label className="text-xs font-bold text-slate-500 uppercase ml-1">Request Template (JSON)</label>
-                            <textarea className="w-full border p-3 rounded-xl mt-1.5 outline-none font-mono text-xs h-32" value={formData.request_template} onChange={e => setFormData({ ...formData, request_template: e.target.value })} />
+                            {/* Diubah jadi h-24 biar muat 3 textarea dengan rapi */}
+                            <textarea className="w-full border p-3 rounded-xl mt-1.5 outline-none font-mono text-xs h-24" value={formData.request_template} onChange={e => setFormData({ ...formData, request_template: e.target.value })} />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase ml-1">Response Mapping (JSON)</label>
+                            <textarea className="w-full border p-3 rounded-xl mt-1.5 outline-none font-mono text-xs h-24" placeholder='{"pg_transaction_id": "data.sessionId", "checkout_url": "data.url"}' value={formData.response_mapping} onChange={e => setFormData({ ...formData, response_mapping: e.target.value })} />
                         </div>
                         <div>
                             <label className="text-xs font-bold text-slate-500 uppercase ml-1">Webhook Mapping (JSON)</label>
-                            <textarea className="w-full border p-3 rounded-xl mt-1.5 outline-none font-mono text-xs h-32" value={formData.webhook_mapping} onChange={e => setFormData({ ...formData, webhook_mapping: e.target.value })} />
+                            <textarea className="w-full border p-3 rounded-xl mt-1.5 outline-none font-mono text-xs h-24" value={formData.webhook_mapping} onChange={e => setFormData({ ...formData, webhook_mapping: e.target.value })} />
                         </div>
                         <div className="flex items-end pt-2">
                             <button type="submit" disabled={submitting} className="w-full h-[52px] bg-slate-900 text-white font-black rounded-2xl hover:bg-slate-800 transition-all shadow-xl flex items-center justify-center gap-2 disabled:opacity-70">
@@ -256,6 +272,9 @@ export default function GatewaysPage() {
                                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                     <span className="text-[10px] font-black text-slate-400 uppercase block mb-1">Authorization</span>
                                     <div className="font-bold text-slate-700">{viewData.auth_type}</div>
+                                    {viewData.auth_type === 'CUSTOM_HEADER' && (
+                                        <div className="text-[10px] text-slate-500 mt-1">Header: {viewData.custom_auth_header}</div>
+                                    )}
                                     <div className="text-[10px] text-slate-400 mt-1 italic">Keys are Encrypted (AES-256)</div>
                                     {viewData.merchant_code && (
                                         <div className="mt-2 pt-2 border-t border-slate-200">
@@ -269,11 +288,15 @@ export default function GatewaysPage() {
                             <div className="space-y-4">
                                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                     <span className="text-[10px] font-black text-slate-400 uppercase block mb-1">Request JSON Sample</span>
-                                    <pre className="text-[10px] font-mono text-slate-600 overflow-x-auto max-h-32">{viewData.request_template}</pre>
+                                    <pre className="text-[10px] font-mono text-slate-600 overflow-x-auto max-h-24">{viewData.request_template}</pre>
+                                </div>
+                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase block mb-1">Response Mapping</span>
+                                    <pre className="text-[10px] font-mono text-slate-600 overflow-x-auto max-h-24">{viewData.response_mapping}</pre>
                                 </div>
                                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                     <span className="text-[10px] font-black text-slate-400 uppercase block mb-1">Webhook Mapping</span>
-                                    <pre className="text-[10px] font-mono text-slate-600 overflow-x-auto max-h-32">{viewData.webhook_mapping}</pre>
+                                    <pre className="text-[10px] font-mono text-slate-600 overflow-x-auto max-h-24">{viewData.webhook_mapping}</pre>
                                 </div>
                             </div>
                         </div>
