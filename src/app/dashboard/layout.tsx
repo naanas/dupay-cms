@@ -11,7 +11,7 @@ import {
     LogOut,
     ChevronRight,
     BookOpen,
-    LayoutDashboard
+    Activity
 } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -36,6 +36,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const navItems = [
         { name: 'Merchants', href: '/dashboard/merchants', icon: Users },
         { name: 'Gateways', href: '/dashboard/gateways', icon: CreditCard },
+        { name: 'Transactions', href: '/dashboard/transactions', icon: Activity },
         { name: 'Documentation', href: '/dashboard/docs', icon: BookOpen },
     ];
 

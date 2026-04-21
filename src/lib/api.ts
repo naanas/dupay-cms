@@ -27,8 +27,17 @@ export const api = {
         if (body) options.body = JSON.stringify(body);
 
         const res = await fetch(`${BASE_URL}/cms${endpoint}`, options);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Terjadi kesalahan API');
+        const raw = await res.text();
+        let data: any = null;
+        if (raw) {
+            try {
+                data = JSON.parse(raw);
+            } catch {
+                if (!res.ok) throw new Error(raw);
+                throw new Error('Response API bukan JSON yang valid');
+            }
+        }
+        if (!res.ok) throw new Error(data?.error || raw || 'Terjadi kesalahan API');
         return data;
     }
 };
