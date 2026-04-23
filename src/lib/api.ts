@@ -1,4 +1,5 @@
-const BASE_URL = 'http://localhost:8080/v1';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+const BASE_URL = `${API_BASE.replace(/\/$/, '')}/v1`;
 
 export const api = {
     login: async (username: string, password: string): Promise<any> => {
