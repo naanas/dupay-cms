@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '../../../lib/api';
+import ChannelEditor from './ChannelEditor';
 import {
     Plus, Settings, Globe, Shield, Code2,
     Trash2, Pencil, Eye, X, Save, CheckCircle2
@@ -29,6 +30,7 @@ export default function GatewaysPage() {
         request_template: '{}',
         response_mapping: '{}', // BARU
         webhook_mapping: '{}',
+        channel_mapping: '{}', // BARU: mapping kode channel internal -> kode PG (misal bca -> BCAVA)
         webhook_secret: '',
         is_active: true
     });
@@ -57,7 +59,8 @@ export default function GatewaysPage() {
             setFormData({
                 name: '', base_url: '', charge_endpoint: '', auth_type: 'BASIC_AUTH',
                 custom_auth_header: '', server_key: '', merchant_code: '', private_key: '',
-                request_template: '{}', response_mapping: '{}', webhook_mapping: '{}', webhook_secret: '', is_active: true
+                request_template: '{}', response_mapping: '{}', webhook_mapping: '{}',
+                channel_mapping: '{}', webhook_secret: '', is_active: true
             });
             loadGateways();
         } catch (err: any) { alert(err.message); } finally { setSubmitting(false); }
@@ -109,14 +112,15 @@ export default function GatewaysPage() {
                     {editingId && (
                         <button onClick={() => {
                             setEditingId(null);
-                            setFormData({ name: '', base_url: '', charge_endpoint: '', auth_type: 'BASIC_AUTH', custom_auth_header: '', server_key: '', merchant_code: '', private_key: '', request_template: '{}', response_mapping: '{}', webhook_mapping: '{}', webhook_secret: '', is_active: true });
+                            setFormData({ name: '', base_url: '', charge_endpoint: '', auth_type: 'BASIC_AUTH', custom_auth_header: '', server_key: '', merchant_code: '', private_key: '', request_template: '{}', response_mapping: '{}', webhook_mapping: '{}', channel_mapping: '{}', webhook_secret: '', is_active: true });
                         }} className="text-sm font-bold text-blue-600 hover:underline">
                             Batal Edit
                         </button>
                     )}
                 </div>
 
-                <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 
                     {/* KOLOM KIRI: Koneksi Utama & Credentials */}
                     <div className="space-y-4">
@@ -191,13 +195,22 @@ export default function GatewaysPage() {
                             <label className="text-xs font-bold text-slate-500 uppercase ml-1">Webhook Mapping (JSON)</label>
                             <textarea className="w-full border p-3 rounded-xl mt-1.5 outline-none font-mono text-xs h-24" value={formData.webhook_mapping} onChange={e => setFormData({ ...formData, webhook_mapping: e.target.value })} />
                         </div>
-                        <div className="flex items-end pt-2">
-                            <button type="submit" disabled={submitting} className="w-full h-[52px] bg-slate-900 text-white font-black rounded-2xl hover:bg-slate-800 transition-all shadow-xl flex items-center justify-center gap-2 disabled:opacity-70">
-                                <Save size={20} />
-                                {submitting ? 'Saving...' : editingId ? 'Update Configuration' : 'Save Gateway'}
-                            </button>
-                        </div>
                     </div>
+                  </div>
+
+                  {/* CHANNEL EDITOR — full width biar muat tabel-nya */}
+                  <ChannelEditor
+                      key={editingId || 'new'}
+                      value={formData.channel_mapping}
+                      onChange={next => setFormData(prev => ({ ...prev, channel_mapping: next }))}
+                  />
+
+                  <div className="flex items-end pt-2">
+                      <button type="submit" disabled={submitting} className="w-full h-[52px] bg-slate-900 text-white font-black rounded-2xl hover:bg-slate-800 transition-all shadow-xl flex items-center justify-center gap-2 disabled:opacity-70">
+                          <Save size={20} />
+                          {submitting ? 'Saving...' : editingId ? 'Update Configuration' : 'Save Gateway'}
+                      </button>
+                  </div>
                 </form>
             </div>
 
@@ -297,6 +310,10 @@ export default function GatewaysPage() {
                                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                     <span className="text-[10px] font-black text-slate-400 uppercase block mb-1">Webhook Mapping</span>
                                     <pre className="text-[10px] font-mono text-slate-600 overflow-x-auto max-h-24">{viewData.webhook_mapping}</pre>
+                                </div>
+                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase block mb-1">Channel Mapping</span>
+                                    <pre className="text-[10px] font-mono text-slate-600 overflow-x-auto max-h-24">{viewData.channel_mapping || '{}'}</pre>
                                 </div>
                             </div>
                         </div>
