@@ -11,34 +11,59 @@ import {
     LogOut,
     ChevronRight,
     BookOpen,
-    Activity
+    Activity,
+    LayoutDashboard,
+    Wallet,
+    Plug,
+    UserCog,
 } from "lucide-react";
+import { canOpen, clearSession, HOME_BY_ROLE, Role, useSessionUser } from "../../lib/session";
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-    const router = useRouter();
-    const pathname = usePathname();
-    const [isMounted, setIsMounted] = useState(false);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-    useEffect(() => {
-        setIsMounted(true);
-        const token = localStorage.getItem('dupay_token');
-        if (!token) router.push('/login');
-    }, [router]);
-
-    const handleLogout = () => {
-        localStorage.removeItem('dupay_token');
-        router.push('/login');
-    };
-
-    if (!isMounted) return null;
-
-    const navItems = [
+const NAV: Record<Role, { name: string; href: string; icon: typeof Users }[]> = {
+    admin: [
         { name: 'Merchants', href: '/dashboard/merchants', icon: Users },
         { name: 'Gateways', href: '/dashboard/gateways', icon: CreditCard },
         { name: 'Transactions', href: '/dashboard/transactions', icon: Activity },
         { name: 'Documentation', href: '/dashboard/docs', icon: BookOpen },
-    ];
+        { name: 'Akun', href: '/dashboard/account', icon: UserCog },
+    ],
+    merchant: [
+        { name: 'Ringkasan', href: '/dashboard/overview', icon: LayoutDashboard },
+        { name: 'Transaksi', href: '/dashboard/my-transactions', icon: Activity },
+        { name: 'Metode Bayar', href: '/dashboard/payment-methods', icon: Wallet },
+        { name: 'Integrasi API', href: '/dashboard/integration', icon: Plug },
+        { name: 'Dokumentasi', href: '/dashboard/docs', icon: BookOpen },
+        { name: 'Akun', href: '/dashboard/account', icon: UserCog },
+    ],
+};
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+    const router = useRouter();
+    const pathname = usePathname();
+    const user = useSessionUser(); // undefined = belum kebaca (render server), null = belum login
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+    // Belum login -> ke /login. Buka menu role lain (mis. merchant ke /dashboard/gateways) -> balik ke home role-nya.
+    useEffect(() => {
+        if (user === undefined) return;
+        if (!user) {
+            clearSession();
+            router.replace('/login');
+        } else if (!canOpen(user.role, pathname)) {
+            router.replace(HOME_BY_ROLE[user.role]);
+        }
+    }, [router, pathname, user]);
+
+    const handleLogout = () => {
+        clearSession();
+        router.push('/login');
+    };
+
+    if (!user || !canOpen(user.role, pathname)) return null;
+
+    const navItems = NAV[user.role];
+    const displayName = user.role === 'admin' ? 'Administrator' : (user.merchant_name || user.username);
+    const initials = displayName.substring(0, 2).toUpperCase();
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row relative text-slate-900 font-sans">
@@ -47,7 +72,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center sticky top-0 z-40 shadow-md">
                 <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-sm text-white">D</div>
-                    <span className="font-bold tracking-tight">DUPAY CMS</span>
+                    <span className="font-bold tracking-tight">{user.role === 'admin' ? 'DUPAY CMS' : 'DUPAY MERCHANT'}</span>
                 </div>
                 <button
                     onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -81,11 +106,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {/* PROFILE SECTION (MOBILE ONLY) */}
                 <div className="md:hidden px-6 pb-6 border-b border-slate-800 mb-4 text-left">
                     <div className="flex items-center gap-4 bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
-                        <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold shadow-inner">AD</div>
+                        <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold shadow-inner">{initials}</div>
                         <div className="flex flex-col">
-                            <span className="text-sm font-bold text-white">Administrator</span>
+                            <span className="text-sm font-bold text-white">{displayName}</span>
                             <span className="text-[10px] text-green-400 font-bold flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span> Online
+                                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span> {user.role === 'admin' ? 'Admin' : 'Merchant'}
                             </span>
                         </div>
                     </div>
@@ -142,15 +167,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         <h1 className="text-xl font-extrabold text-slate-800 uppercase tracking-wider">
                             {navItems.find(i => pathname.includes(i.href))?.name || 'Dashboard'}
                         </h1>
-                        <p className="text-xs text-slate-400 font-medium italic">Dupay Orchestrator Control Panel</p>
+                        <p className="text-xs text-slate-400 font-medium italic">{user.role === 'admin' ? 'Dupay Orchestrator Control Panel' : `Merchant Dashboard · ${user.username}`}</p>
                     </div>
 
                     <div className="flex items-center gap-4 bg-slate-50 p-2 pr-5 rounded-full border border-slate-100 shadow-sm">
-                        <div className="w-9 h-9 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-sm border border-blue-200 shadow-inner">AD</div>
+                        <div className="w-9 h-9 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-sm border border-blue-200 shadow-inner">{initials}</div>
                         <div className="flex flex-col text-left">
-                            <span className="text-xs font-bold text-slate-700">Administrator</span>
+                            <span className="text-xs font-bold text-slate-700">{displayName}</span>
                             <span className="text-[10px] text-green-500 font-bold flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span> Online
+                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span> {user.role === 'admin' ? 'Admin' : 'Merchant'}
                             </span>
                         </div>
                     </div>
@@ -158,7 +183,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                 {/* Scrollable Content */}
                 <div className="flex-1 overflow-y-auto p-4 md:p-10">
-                    <div className="max-w-6xl mx-auto">
+                    <div key={pathname} className="max-w-6xl mx-auto page-enter">
                         {children}
                     </div>
                 </div>

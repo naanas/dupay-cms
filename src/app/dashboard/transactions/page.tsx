@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../../lib/api";
+import { PageSkeleton } from "../../../components/ui";
 import { Eye, RefreshCw } from "lucide-react";
 
 type TransactionItem = {
@@ -27,6 +28,7 @@ export default function TransactionsPage() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [selected, setSelected] = useState<TransactionItem | null>(null);
+    const [syncingId, setSyncingId] = useState<string | null>(null);
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("ALL");
     const [merchantFilter, setMerchantFilter] = useState("ALL");
@@ -48,6 +50,21 @@ export default function TransactionsPage() {
     useEffect(() => {
         loadTransactions();
     }, []);
+
+    // Tanya status langsung ke PG lewat endpoint "Cek Status" gateway-nya.
+    const syncStatus = async (trx: TransactionItem) => {
+        setSyncingId(trx.id);
+        try {
+            const res = await api.fetchCMS(`/transactions/${trx.id}/sync`, "POST");
+            const newStatus = res?.data?.status;
+            alert(`Status di ${trx.gateway_name || "PG"}: ${res?.pg_status}\nStatus Dupay: ${trx.status} → ${newStatus}`);
+            await loadTransactions(true);
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setSyncingId(null);
+        }
+    };
 
     const stats = useMemo(() => {
         const total = transactions.length;
@@ -97,11 +114,11 @@ export default function TransactionsPage() {
     };
 
     if (loading) {
-        return <div className="p-10 text-center text-slate-400 font-medium">Memuat data transaksi...</div>;
+        return <PageSkeleton stats={4} panels={1} table />;
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="space-y-8 animate-in">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight">Transaction Monitor</h1>
@@ -184,55 +201,71 @@ export default function TransactionsPage() {
             </div>
 
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse whitespace-nowrap">
+                <div className="table-wrap">
+                    <table className="data-table text-left">
                         <thead>
                             <tr className="bg-slate-50 border-b border-slate-200">
-                                <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase">Waktu</th>
                                 <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase">Order</th>
-                                <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase">Merchant</th>
-                                <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase">Gateway</th>
-                                <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase">Amount</th>
-                                <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase">Status</th>
-                                <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase">PG HTTP</th>
-                                <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase text-right">Detail</th>
+                                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">Merchant / Gateway</th>
+                                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">Amount</th>
+                                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">Status</th>
+                                <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase text-right w-28">Aksi</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-slate-100 stagger">
                             {filteredTransactions.map((trx) => (
-                                <tr key={trx.id} className="hover:bg-slate-50 transition-colors">
-                                    <td className="px-5 py-3 text-xs text-slate-600">{new Date(trx.created_at).toLocaleString("id-ID")}</td>
+                                <tr key={trx.id} className="hover:bg-slate-50">
                                     <td className="px-5 py-3">
-                                        <p className="text-sm font-bold text-slate-800">{trx.order_id}</p>
-                                        <p className="text-[11px] text-slate-500">{trx.payment_method}</p>
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-800 break-all">{trx.order_id}</p>
+                                            <p className="text-[11px] text-slate-500">
+                                                <span className="font-mono">{trx.payment_method}</span> · {new Date(trx.created_at).toLocaleString("id-ID")}
+                                            </p>
+                                        </div>
                                     </td>
-                                    <td className="px-5 py-3 text-sm text-slate-700">{trx.merchant_name || trx.merchant_id}</td>
-                                    <td className="px-5 py-3 text-sm text-slate-700">{trx.gateway_name || trx.gateway_id}</td>
-                                    <td className="px-5 py-3 text-sm font-semibold text-slate-800">{formatAmount(trx.amount)}</td>
-                                    <td className="px-5 py-3">
-                                        <span className={`inline-flex px-2.5 py-1 rounded-md border text-[11px] font-bold ${statusClass(trx.status)}`}>
-                                            {trx.status}
-                                        </span>
+                                    <td className="px-4 py-3" data-label="Merchant">
+                                        <div>
+                                            <p className="text-sm text-slate-700">{trx.merchant_name || trx.merchant_id}</p>
+                                            <p className="text-[11px] text-slate-500">via {trx.gateway_name || trx.gateway_id || "-"}</p>
+                                        </div>
                                     </td>
-                                    <td className="px-5 py-3">
-                                        <span className="text-xs font-mono px-2 py-1 rounded-md bg-slate-100 border border-slate-200 text-slate-700">
-                                            {trx.pg_status_code || "-"}
-                                        </span>
+                                    <td className="px-4 py-3 text-sm font-semibold text-slate-800" data-label="Amount">{formatAmount(trx.amount)}</td>
+                                    <td className="px-4 py-3" data-label="Status">
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            <span className={`inline-flex px-2.5 py-1 rounded-md border text-[11px] font-bold ${statusClass(trx.status)}`}>
+                                                {trx.status}
+                                            </span>
+                                            {trx.pg_status_code ? (
+                                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600" title="HTTP status dari PG">
+                                                    PG {trx.pg_status_code}
+                                                </span>
+                                            ) : null}
+                                        </div>
                                     </td>
-                                    <td className="px-5 py-3 text-right">
-                                        <button
-                                            onClick={() => setSelected(trx)}
-                                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg"
-                                            title="Lihat Detail"
-                                        >
-                                            <Eye size={18} />
-                                        </button>
+                                    <td className="px-5 py-3" data-label="Aksi">
+                                        <div className="flex justify-end">
+                                            <button
+                                                onClick={() => syncStatus(trx)}
+                                                disabled={syncingId !== null}
+                                                className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg disabled:opacity-50 transition-colors"
+                                                title="Cek Status ke PG"
+                                            >
+                                                <RefreshCw size={18} className={syncingId === trx.id ? "animate-spin" : ""} />
+                                            </button>
+                                            <button
+                                                onClick={() => setSelected(trx)}
+                                                className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                                                title="Lihat Detail"
+                                            >
+                                                <Eye size={18} />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
                             {filteredTransactions.length === 0 && (
                                 <tr>
-                                    <td colSpan={8} className="px-5 py-8 text-center text-sm text-slate-500">
+                                    <td colSpan={5} className="px-5 py-8 text-center text-sm text-slate-500">
                                         Tidak ada data yang cocok dengan filter pencarian.
                                     </td>
                                 </tr>
@@ -243,8 +276,8 @@ export default function TransactionsPage() {
             </div>
 
             {selected && (
-                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm p-4 flex items-center justify-center">
-                    <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl p-6 md:p-8 space-y-5">
+                <div className="modal-backdrop fixed inset-0 z-50 bg-black/50 backdrop-blur-sm p-4 flex items-center justify-center" onClick={() => setSelected(null)}>
+                    <div className="modal-panel w-full max-w-4xl bg-white rounded-2xl shadow-2xl p-6 md:p-8 space-y-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-start justify-between gap-4">
                             <div>
                                 <h2 className="text-xl font-black text-slate-900">Detail Transaksi</h2>

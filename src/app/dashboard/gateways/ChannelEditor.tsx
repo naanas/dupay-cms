@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from 'react';
-import { Plus, Trash2, Code2, Table2 } from 'lucide-react';
+import { Plus, Trash2, Code2, Table2, DownloadCloud } from 'lucide-react';
+import { api } from '../../../lib/api';
 
 export type Channel = {
     code: string;
@@ -15,6 +16,16 @@ export type Channel = {
     fee_flat?: number;
     fee_percent?: number;
     active: boolean;
+    sync_state?: SyncState; // cuma buat tampilan hasil "Tarik dari PG", nggak ikut disimpan
+};
+
+type SyncState = 'new' | 'updated' | 'unchanged' | 'missing';
+
+const SYNC_BADGE: Record<SyncState, { label: string; className: string } | null> = {
+    new: { label: 'BARU', className: 'bg-emerald-100 text-emerald-700' },
+    updated: { label: 'BERUBAH', className: 'bg-blue-100 text-blue-700' },
+    missing: { label: 'HILANG DI PG', className: 'bg-amber-100 text-amber-700' },
+    unchanged: null,
 };
 
 const METHODS: Channel['method'][] = ['', 'va', 'qris', 'ewallet', 'cstore'];
@@ -83,34 +94,21 @@ const serialize = (channels: Channel[]): string => {
     return cleaned.length === 0 ? '[]' : JSON.stringify(cleaned, null, 2);
 };
 
-// Default channels buat Tripay (paling umum). Bisa di-klik "Load Tripay Preset" buat autofill.
-const TRIPAY_PRESET: Channel[] = [
-    { code: 'qris', pg_code: 'QRIS', label: 'QRIS', method: 'qris', group: 'QRIS', logo: '/payment/qris.png', min_amount: 1000, fee_flat: 750, fee_percent: 0.7, active: true },
-    { code: 'bca', pg_code: 'BCAVA', label: 'BCA Virtual Account', method: 'va', group: 'Virtual Account', logo: '/payment/bca.png', min_amount: 10000, fee_flat: 4500, active: true },
-    { code: 'mandiri', pg_code: 'MANDIRIVA', label: 'Mandiri Virtual Account', method: 'va', group: 'Virtual Account', logo: '/payment/mandiri.png', min_amount: 10000, fee_flat: 4000, active: true },
-    { code: 'bni', pg_code: 'BNIVA', label: 'BNI Virtual Account', method: 'va', group: 'Virtual Account', logo: '/payment/bni.png', min_amount: 10000, fee_flat: 4500, active: true },
-    { code: 'bri', pg_code: 'BRIVA', label: 'BRI Virtual Account', method: 'va', group: 'Virtual Account', logo: '/payment/bri.png', min_amount: 10000, fee_flat: 3500, active: true },
-    { code: 'cimb', pg_code: 'CIMBVA', label: 'CIMB Niaga VA', method: 'va', group: 'Virtual Account', logo: '/payment/cimb.png', min_amount: 10000, fee_flat: 4500, active: true },
-    { code: 'permata', pg_code: 'PERMATAVA', label: 'Permata Virtual Account', method: 'va', group: 'Virtual Account', logo: '/payment/permata.png', min_amount: 10000, fee_flat: 4500, active: true },
-    { code: 'dana', pg_code: 'DANA', label: 'DANA', method: 'ewallet', group: 'E-Wallet', logo: '/payment/dana.png', min_amount: 10000, fee_percent: 1.5, active: true },
-    { code: 'ovo', pg_code: 'OVO', label: 'OVO', method: 'ewallet', group: 'E-Wallet', logo: '/payment/ovo.png', min_amount: 10000, fee_percent: 1.5, active: true },
-    { code: 'shopeepay', pg_code: 'SHOPEEPAY', label: 'ShopeePay', method: 'ewallet', group: 'E-Wallet', logo: '/payment/shopeepay.png', min_amount: 10000, fee_percent: 2.0, active: true },
-    { code: 'linkaja', pg_code: 'LINKAJA', label: 'LinkAja', method: 'ewallet', group: 'E-Wallet', logo: '/payment/linkaja.png', min_amount: 10000, fee_percent: 1.5, active: true },
-    { code: 'indomaret', pg_code: 'INDOMARET', label: 'Indomaret', method: 'cstore', group: 'Retail', logo: '/payment/indomaret.png', min_amount: 10000, fee_flat: 3500, active: true },
-    { code: 'alfamart', pg_code: 'ALFAMART', label: 'Alfamart', method: 'cstore', group: 'Retail', logo: '/payment/alfamart.png', min_amount: 10000, fee_flat: 3500, active: true },
-];
-
 type Props = {
     value: string;                   // raw JSON string (akan jadi isi channel_mapping column)
     onChange: (next: string) => void;
+    getDraft: () => object;          // isi form gateway (boleh belum disimpan), dipakai buat Tarik dari PG
+    fetchDisabledReason?: string;    // diisi = tombol Tarik dari PG dimatiin dengan alasan ini
 };
 
-export default function ChannelEditor({ value, onChange }: Props) {
+export default function ChannelEditor({ value, onChange, getDraft, fetchDisabledReason }: Props) {
     const initial = useMemo(() => parseInitial(value), []); // parse sekali di mount
     const [channels, setChannels] = useState<Channel[]>(initial.channels);
     const [mode, setMode] = useState<'visual' | 'raw'>('visual');
     const [rawDraft, setRawDraft] = useState(value);
     const [jsonError, setJsonError] = useState<string | null>(null);
+    const [fetching, setFetching] = useState(false);
+    const [syncSummary, setSyncSummary] = useState<string | null>(null);
 
     const commitChannels = (next: Channel[]) => {
         setChannels(next);
@@ -125,9 +123,25 @@ export default function ChannelEditor({ value, onChange }: Props) {
     const addRow = () => commitChannels([...channels, emptyChannel()]);
     const removeRow = (idx: number) => commitChannels(channels.filter((_, i) => i !== idx));
 
-    const loadPreset = () => {
-        if (channels.length > 0 && !confirm('Isi semua channel dengan preset Tripay? Data existing akan ditimpa.')) return;
-        commitChannels([...TRIPAY_PRESET]);
+    // Tarik daftar channel dari PG (endpoint "Daftar Channel" gateway ini), digabung sama yang lagi diedit.
+    // Hasilnya cuma masuk form; baru tersimpan kalau admin klik Update Configuration.
+    const fetchFromPG = async () => {
+        if (fetchDisabledReason) return;
+        setFetching(true);
+        try {
+            const res = await api.fetchCMS('/gateways/fetch-channels', 'POST', {
+                gateway: { ...getDraft(), channel_mapping: serialize(channels) },
+            });
+            const items: Channel[] = (res?.data || []).map((ch: Partial<Channel>) => ({ ...emptyChannel(), ...ch, active: ch.active !== false }));
+            commitChannels(items);
+            setMode('visual');
+            const count = (state: SyncState) => items.filter(ch => ch.sync_state === state).length;
+            setSyncSummary(`${count('new')} baru, ${count('updated')} berubah, ${count('missing')} hilang dari PG (dinonaktifkan). Cek kode & jenis channel-nya, lalu klik Simpan.`);
+        } catch (err) {
+            alert(err instanceof Error ? err.message : String(err));
+        } finally {
+            setFetching(false);
+        }
     };
 
     const switchToRaw = () => {
@@ -163,7 +177,7 @@ export default function ChannelEditor({ value, onChange }: Props) {
         <div className="border border-slate-200 rounded-2xl p-4 bg-white">
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Channel Mapping</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tabel Channel</label>
                     {initial.usedLegacy && mode === 'visual' && (
                         <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md">
                             Migrated from legacy format
@@ -172,8 +186,14 @@ export default function ChannelEditor({ value, onChange }: Props) {
                 </div>
                 <div className="flex items-center gap-2">
                     {mode === 'visual' && (
-                        <button type="button" onClick={loadPreset} className="text-[11px] font-bold text-blue-600 hover:underline">
-                            Load Tripay Preset
+                        <button
+                            type="button"
+                            onClick={fetchFromPG}
+                            disabled={!!fetchDisabledReason || fetching}
+                            title={fetchDisabledReason || 'Ambil daftar channel dari endpoint Daftar Channel'}
+                            className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline disabled:text-slate-300 disabled:no-underline"
+                        >
+                            <DownloadCloud size={12} /> {fetching ? 'Menarik...' : 'Tarik dari PG'}
                         </button>
                     )}
                     <div className="flex border border-slate-200 rounded-lg overflow-hidden">
@@ -195,6 +215,18 @@ export default function ChannelEditor({ value, onChange }: Props) {
                 </div>
             </div>
 
+            <p className="text-[11px] text-slate-400 -mt-1 mb-3">
+                Kode Merchant = yang dikirim merchant (mis. <code>bca</code>). Kode di PG = yang dikirim ke PG (mis. <code>BCAVA</code>). Jenis nentuin endpoint Buat Transaksi mana yang dipakai.
+                {fetchDisabledReason && <span className="block text-amber-600 mt-0.5">Tarik dari PG: {fetchDisabledReason}</span>}
+            </p>
+
+            {syncSummary && mode === 'visual' && (
+                <div className="flex items-start justify-between gap-3 text-[11px] font-medium text-blue-800 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-3">
+                    <span>{syncSummary}</span>
+                    <button type="button" onClick={() => setSyncSummary(null)} className="font-bold text-blue-600 hover:underline">Tutup</button>
+                </div>
+            )}
+
             {mode === 'raw' ? (
                 <div>
                     <textarea
@@ -208,105 +240,112 @@ export default function ChannelEditor({ value, onChange }: Props) {
                 <>
                     {channels.length === 0 ? (
                         <div className="text-center py-8 border-2 border-dashed border-slate-200 rounded-xl">
-                            <p className="text-xs text-slate-400 mb-3">Belum ada channel. Tambah manual atau klik "Load Tripay Preset".</p>
+                            <p className="text-xs text-slate-400 mb-3">Belum ada channel. Tambah manual, atau atur endpoint Daftar Channel lalu klik &quot;Tarik dari PG&quot;.</p>
                             <button type="button" onClick={addRow} className="text-xs font-bold text-blue-600 hover:underline">
                                 + Tambah Channel Manual
                             </button>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-xs">
+                        <div className="table-wrap">
+                            <table className="data-table table-fixed text-xs">
                                 <thead>
                                     <tr className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                                        <th className="p-1.5 text-left">On</th>
-                                        <th className="p-1.5 text-left">Code</th>
-                                        <th className="p-1.5 text-left">PG Code</th>
-                                        <th className="p-1.5 text-left">Label</th>
-                                        <th className="p-1.5 text-left">Method</th>
+                                        <th className="p-1.5 text-left w-14">On</th>
+                                        <th className="p-1.5 text-left" title="Kode yang dikirim merchant di payment_method">Kode Merchant</th>
+                                        <th className="p-1.5 text-left" title="Kode channel di PG, dikirim lewat {{payment_method}}">Kode di PG</th>
+                                        <th className="p-1.5 text-left w-[18%]">Label</th>
+                                        <th className="p-1.5 text-left" title="Nentuin endpoint Buat Transaksi mana yang dipakai">Jenis</th>
                                         <th className="p-1.5 text-left">Group</th>
                                         <th className="p-1.5 text-right">Min Amt</th>
                                         <th className="p-1.5 text-right">Fee Flat</th>
                                         <th className="p-1.5 text-right">Fee %</th>
-                                        <th className="p-1.5"></th>
+                                        <th className="p-1.5 w-10"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {channels.map((ch, idx) => (
-                                        <tr key={idx} className={ch.active ? '' : 'opacity-50'}>
-                                            <td className="p-1">
-                                                <input type="checkbox" checked={ch.active} onChange={e => updateRow(idx, { active: e.target.checked })} />
+                                        <tr key={idx} className={`transition-opacity duration-200 ${ch.active ? '' : 'opacity-50'}`}>
+                                            <td className="p-1" data-label="Aktif">
+                                                <div className="flex items-center gap-1">
+                                                    <input type="checkbox" checked={ch.active} onChange={e => updateRow(idx, { active: e.target.checked })} />
+                                                    {ch.sync_state && SYNC_BADGE[ch.sync_state] && (
+                                                        <span className={`text-[9px] font-black px-1 py-0.5 rounded ${SYNC_BADGE[ch.sync_state]!.className}`}>
+                                                            {SYNC_BADGE[ch.sync_state]!.label}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
-                                            <td className="p-1">
+                                            <td className="p-1" data-label="Kode merchant">
                                                 <input
-                                                    className="w-20 border border-slate-200 p-1.5 rounded-md text-[11px] outline-none focus:border-blue-400"
+                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] outline-none focus:border-blue-400"
                                                     placeholder="bca"
                                                     value={ch.code}
                                                     onChange={e => updateRow(idx, { code: e.target.value.toLowerCase() })}
                                                 />
                                             </td>
-                                            <td className="p-1">
+                                            <td className="p-1" data-label="Kode di PG">
                                                 <input
-                                                    className="w-24 border border-slate-200 p-1.5 rounded-md text-[11px] font-mono outline-none focus:border-blue-400"
+                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] font-mono outline-none focus:border-blue-400"
                                                     placeholder="BCAVA"
                                                     value={ch.pg_code}
                                                     onChange={e => updateRow(idx, { pg_code: e.target.value })}
                                                 />
                                             </td>
-                                            <td className="p-1">
+                                            <td className="p-1" data-label="Label">
                                                 <input
-                                                    className="w-40 border border-slate-200 p-1.5 rounded-md text-[11px] outline-none focus:border-blue-400"
+                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] outline-none focus:border-blue-400"
                                                     placeholder="BCA Virtual Account"
                                                     value={ch.label || ''}
                                                     onChange={e => updateRow(idx, { label: e.target.value })}
                                                 />
                                             </td>
-                                            <td className="p-1">
+                                            <td className="p-1" data-label="Jenis">
                                                 <select
-                                                    className="border border-slate-200 p-1.5 rounded-md text-[11px] bg-white outline-none focus:border-blue-400"
+                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] bg-white outline-none focus:border-blue-400"
                                                     value={ch.method || ''}
                                                     onChange={e => updateRow(idx, { method: e.target.value as Channel['method'] })}
                                                 >
                                                     {METHODS.map(m => <option key={m || 'none'} value={m || ''}>{m || '—'}</option>)}
                                                 </select>
                                             </td>
-                                            <td className="p-1">
+                                            <td className="p-1" data-label="Group">
                                                 <select
-                                                    className="border border-slate-200 p-1.5 rounded-md text-[11px] bg-white outline-none focus:border-blue-400"
+                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] bg-white outline-none focus:border-blue-400"
                                                     value={ch.group || ''}
                                                     onChange={e => updateRow(idx, { group: e.target.value as Channel['group'] })}
                                                 >
                                                     {GROUPS.map(g => <option key={g || 'none'} value={g || ''}>{g || '—'}</option>)}
                                                 </select>
                                             </td>
-                                            <td className="p-1">
+                                            <td className="p-1" data-label="Min amount">
                                                 <input
                                                     type="number"
-                                                    className="w-20 border border-slate-200 p-1.5 rounded-md text-[11px] text-right outline-none focus:border-blue-400"
+                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] text-right outline-none focus:border-blue-400"
                                                     placeholder="10000"
                                                     value={ch.min_amount || ''}
                                                     onChange={e => updateRow(idx, { min_amount: Number(e.target.value) || 0 })}
                                                 />
                                             </td>
-                                            <td className="p-1">
+                                            <td className="p-1" data-label="Fee flat">
                                                 <input
                                                     type="number"
-                                                    className="w-16 border border-slate-200 p-1.5 rounded-md text-[11px] text-right outline-none focus:border-blue-400"
+                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] text-right outline-none focus:border-blue-400"
                                                     placeholder="4500"
                                                     value={ch.fee_flat || ''}
                                                     onChange={e => updateRow(idx, { fee_flat: Number(e.target.value) || 0 })}
                                                 />
                                             </td>
-                                            <td className="p-1">
+                                            <td className="p-1" data-label="Fee %">
                                                 <input
                                                     type="number"
                                                     step="0.1"
-                                                    className="w-14 border border-slate-200 p-1.5 rounded-md text-[11px] text-right outline-none focus:border-blue-400"
+                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] text-right outline-none focus:border-blue-400"
                                                     placeholder="0.7"
                                                     value={ch.fee_percent || ''}
                                                     onChange={e => updateRow(idx, { fee_percent: Number(e.target.value) || 0 })}
                                                 />
                                             </td>
-                                            <td className="p-1 text-right">
+                                            <td className="p-1 text-right" data-label="Hapus">
                                                 <button
                                                     type="button"
                                                     onClick={() => removeRow(idx)}

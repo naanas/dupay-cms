@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '../../../lib/api';
+import MerchantLoginModal from './MerchantLoginModal';
+import { PageSkeleton } from '../../../components/ui';
 import {
     Plus, ShieldCheck, Globe, Key, Mail, Phone,
-    Copy, Check, Eye, Pencil, Trash2, Search, Building2, X
+    Copy, Check, Eye, Pencil, Trash2, Search, Building2, X, KeyRound
 } from 'lucide-react';
 
 export default function MerchantsPage() {
@@ -16,6 +18,7 @@ export default function MerchantsPage() {
     // State untuk Edit dan View Modal
     const [editingId, setEditingId] = useState<string | null>(null);
     const [viewData, setViewData] = useState<any | null>(null);
+    const [loginFor, setLoginFor] = useState<any | null>(null);
 
     // FORM PASTI 6 FIELD SEKARANG
     const [formData, setFormData] = useState({
@@ -79,9 +82,20 @@ export default function MerchantsPage() {
         }
     };
 
+    const toggleActive = async (m: any) => {
+        const next = !m.is_active;
+        if (!next && !window.confirm(`Nonaktifkan ${m.name}? API Key & login dashboard-nya langsung ditolak.`)) return;
+        try {
+            await api.fetchCMS(`/merchants/${m.id}/active`, 'PUT', { is_active: next });
+            setMerchants(prev => prev.map(x => x.id === m.id ? { ...x, is_active: next } : x));
+        } catch (err: any) { alert(err.message); }
+    };
+
+    const pendingCount = merchants.filter(m => !m.is_active).length;
+
     const getInitials = (name: string) => name.substring(0, 2).toUpperCase();
 
-    if (loading) return <div className="p-10 text-center text-slate-400 font-medium">Memuat data merchant...</div>;
+    if (loading) return <PageSkeleton panels={1} table />;
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 relative">
@@ -91,6 +105,11 @@ export default function MerchantsPage() {
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight">Merchant Management</h1>
                     <p className="text-sm text-slate-500 mt-1">Kelola akses, kredensial, dan keamanan semua klien Dupay.</p>
                 </div>
+                {pendingCount > 0 && (
+                    <div className="text-sm font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2">
+                        {pendingCount} merchant nonaktif / nunggu persetujuan. Klik status-nya buat mengaktifkan.
+                    </div>
+                )}
             </div>
 
             {/* FORM: 6 INPUTS LENGKAP */}
@@ -143,90 +162,94 @@ export default function MerchantsPage() {
 
             {/* TABLE DATA */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse whitespace-nowrap">
+                <div className="table-wrap">
+                    <table className="data-table text-left">
                         <thead>
                             <tr className="bg-slate-50 border-b border-slate-200">
-                                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Merchant Info</th>
-                                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">IP Whitelist</th>
-                                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">API Credentials</th>
-                                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Actions</th>
+                                <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase">Merchant</th>
+                                <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase w-28">Status</th>
+                                <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase w-[30%]">API Credentials</th>
+                                <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase w-36">Login</th>
+                                <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase text-right w-36">Aksi</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-slate-100 stagger">
+                            {merchants.length === 0 && (
+                                <tr><td colSpan={5} className="px-6 py-10 text-center text-sm text-slate-400">Belum ada merchant.</td></tr>
+                            )}
                             {merchants.map((m) => (
-                                <tr key={m.id} className="hover:bg-slate-50 transition-colors group">
+                                <tr key={m.id} className="hover:bg-slate-50">
 
-                                    {/* Column 1: Info (Name, Email, Phone) */}
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-4">
+                                    {/* Info: nama, kontak, IP whitelist */}
+                                    <td className="px-5 py-4">
+                                        <div className="flex items-center gap-3 min-w-0">
                                             <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold shrink-0">
                                                 {getInitials(m.name)}
                                             </div>
-                                            <div>
-                                                <div className="font-bold text-slate-900">{m.name}</div>
-                                                <div className="text-xs text-slate-500 flex gap-2 mt-1">
-                                                    <span>{m.email}</span> • <span>{m.phone || 'No Phone'}</span>
+                                            <div className="min-w-0">
+                                                <div className="font-bold text-slate-900 truncate">{m.name}</div>
+                                                <div className="text-xs text-slate-500 mt-0.5 break-all">
+                                                    {m.email}{m.phone ? ` · ${m.phone}` : ''}
+                                                </div>
+                                                <div className="flex flex-wrap gap-1 mt-1.5">
+                                                    {m.whitelisted_ips ? m.whitelisted_ips.split(',').map((ip: string, i: number) => (
+                                                        <span key={i} className="text-[10px] font-mono bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-100">
+                                                            {ip.trim()}
+                                                        </span>
+                                                    )) : (
+                                                        <span className="text-[10px] italic text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">Semua IP boleh</span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
                                     </td>
 
-                                    {/* Column 2: IP Whitelist Tampil Jelas */}
-                                    <td className="px-6 py-4">
-                                        {m.whitelisted_ips ? (
-                                            <div className="flex flex-col gap-1">
-                                                {m.whitelisted_ips.split(',').map((ip: string, i: number) => (
-                                                    <span key={i} className="text-xs font-mono bg-emerald-50 text-emerald-700 px-2 py-1 rounded border border-emerald-100 w-fit">
-                                                        {ip.trim()}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <span className="text-xs italic text-slate-400 bg-slate-100 px-2 py-1 rounded">Any IP Allowed</span>
-                                        )}
+                                    {/* Status aktif: merchant hasil daftar sendiri mulai dari nonaktif */}
+                                    <td className="px-4 py-4" data-label="Status">
+                                        <button
+                                            onClick={() => toggleActive(m)}
+                                            title={m.is_active ? 'Nonaktifkan merchant' : 'Aktifkan merchant'}
+                                            className={`text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-colors ${m.is_active ? 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'}`}
+                                        >
+                                            {m.is_active ? 'Aktif' : 'Aktifkan'}
+                                        </button>
                                     </td>
 
-                                    {/* Column 3: Credentials (DENGAN TOMBOL COPY YANG SUDAH DIPERBAIKI) */}
-                                    <td className="px-6 py-4">
-                                        <div className="flex flex-col gap-2 min-w-[260px]">
-                                            <div className="flex items-center justify-between border rounded-md p-1.5 pl-2.5 hover:border-blue-300 transition-all">
-                                                <div className="flex gap-2 items-center">
-                                                    <Key size={12} className="text-blue-500" />
-                                                    <span className="text-xs font-mono">{m.api_key.substring(0, 16)}...</span>
+                                    {/* Credentials */}
+                                    <td className="px-4 py-4" data-label="API Key">
+                                        <div className="flex flex-col gap-1.5 w-full max-w-[260px]">
+                                            {[
+                                                { key: 'pk', value: m.api_key, icon: <Key size={12} className="text-blue-500 shrink-0" />, hover: 'hover:border-blue-300' },
+                                                { key: 'sk', value: m.secret_key, icon: <ShieldCheck size={12} className="text-red-500 shrink-0" />, hover: 'hover:border-red-300' },
+                                            ].map(c => (
+                                                <div key={c.key} className={`flex items-center gap-2 border rounded-md p-1 pl-2 transition-colors ${c.hover}`}>
+                                                    {c.icon}
+                                                    <span className="flex-1 min-w-0 text-xs font-mono truncate text-left">{c.value}</span>
+                                                    <button onClick={() => handleCopy(c.value, m.id + c.key)} className="p-1.5 hover:bg-slate-100 rounded transition-colors shrink-0" title="Salin">
+                                                        {copiedId === m.id + c.key ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} className="text-slate-400" />}
+                                                    </button>
                                                 </div>
-                                                <button
-                                                    onClick={() => handleCopy(m.api_key, m.id + 'pk')}
-                                                    className="p-1.5 hover:bg-blue-50 rounded transition-all"
-                                                >
-                                                    {copiedId === m.id + 'pk' ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} className="text-slate-400 hover:text-blue-500" />}
-                                                </button>
-                                            </div>
-                                            <div className="flex items-center justify-between border rounded-md p-1.5 pl-2.5 hover:border-red-300 transition-all">
-                                                <div className="flex gap-2 items-center">
-                                                    <ShieldCheck size={12} className="text-red-500" />
-                                                    <span className="text-xs font-mono">{m.secret_key.substring(0, 16)}...</span>
-                                                </div>
-                                                <button
-                                                    onClick={() => handleCopy(m.secret_key, m.id + 'sk')}
-                                                    className="p-1.5 hover:bg-red-50 rounded transition-all"
-                                                >
-                                                    {copiedId === m.id + 'sk' ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} className="text-slate-400 hover:text-red-500" />}
-                                                </button>
-                                            </div>
+                                            ))}
                                         </div>
                                     </td>
 
-                                    {/* Column 4: Actions */}
-                                    <td className="px-6 py-4 text-right">
+                                    {/* Akun login dashboard merchant */}
+                                    <td className="px-4 py-4" data-label="Login">
+                                        <button onClick={() => setLoginFor(m)} className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1.5 rounded-lg border max-w-full transition-colors ${m.login_username ? 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100' : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'}`}>
+                                            <KeyRound size={12} className="shrink-0" /> <span className="truncate">{m.login_username || 'Bikin akun'}</span>
+                                        </button>
+                                    </td>
+
+                                    {/* Actions */}
+                                    <td className="px-5 py-4" data-label="Aksi">
                                         <div className="flex items-center justify-end gap-1">
-                                            <button onClick={() => setViewData(m)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg" title="View">
+                                            <button onClick={() => setViewData(m)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Lihat">
                                                 <Eye size={18} />
                                             </button>
-                                            <button onClick={() => handleEditClick(m)} className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg" title="Edit">
+                                            <button onClick={() => handleEditClick(m)} className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg transition-colors" title="Edit">
                                                 <Pencil size={18} />
                                             </button>
-                                            <button onClick={() => handleDelete(m.id, m.name)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg" title="Delete">
+                                            <button onClick={() => handleDelete(m.id, m.name)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Hapus">
                                                 <Trash2 size={18} />
                                             </button>
                                         </div>
@@ -238,10 +261,12 @@ export default function MerchantsPage() {
                 </div>
             </div>
 
+            {loginFor && <MerchantLoginModal merchant={loginFor} onClose={() => setLoginFor(null)} onSaved={loadMerchants} />}
+
             {/* MODAL VIEW DETAIL */}
             {viewData && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-3xl p-8 w-full max-w-lg relative shadow-2xl">
+                <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setViewData(null)}>
+                    <div className="modal-panel bg-white rounded-3xl p-6 md:p-8 w-full max-w-lg relative shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                         <button onClick={() => setViewData(null)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-800">
                             <X size={24} />
                         </button>

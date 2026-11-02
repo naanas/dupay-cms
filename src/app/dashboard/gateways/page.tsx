@@ -1,330 +1,228 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../../../lib/api';
-import ChannelEditor from './ChannelEditor';
-import {
-    Plus, Settings, Globe, Shield, Code2,
-    Trash2, Pencil, Eye, X, Save, CheckCircle2
-} from 'lucide-react';
+import GatewayEditor from './GatewayEditor';
+import { authConfig, autoEndpointName, endpointsFromGateway, GatewayRecord } from './gatewayTypes';
+import { Plus, Globe, Trash2, Pencil } from 'lucide-react';
+import { PageSkeleton } from '../../../components/ui';
+
+type ChannelRow = { code?: string; label?: string; active?: boolean; min_amount?: number; max_amount?: number };
+
+// Metode bayar -> gateway yang punya channel itu, urut sesuai prioritas (sama kayak pemilihan di backend).
+const buildRouting = (gateways: GatewayRecord[]) => {
+    const rows = new Map<string, { label: string; gateways: string[] }>();
+    const sorted = gateways
+        .filter(gw => gw.is_active !== false)
+        .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0) || a.name.localeCompare(b.name));
+    for (const gw of sorted) {
+        let channels: ChannelRow[] = [];
+        try { const v = JSON.parse(gw.channel_mapping || '[]'); channels = Array.isArray(v) ? v : []; } catch { /* format lama / rusak */ }
+        for (const ch of channels) {
+            const code = (ch.code || '').trim().toLowerCase();
+            if (!code || ch.active === false) continue;
+            const row = rows.get(code) || { label: ch.label || code, gateways: [] };
+            if (!row.gateways.includes(gw.name)) row.gateways.push(gw.name);
+            rows.set(code, row);
+        }
+    }
+    return [...rows.entries()].sort(([a], [b]) => a.localeCompare(b));
+};
 
 export default function GatewaysPage() {
-    const [gateways, setGateways] = useState<any[]>([]);
+    const [gateways, setGateways] = useState<GatewayRecord[]>([]);
     const [loading, setLoading] = useState(true);
-    const [submitting, setSubmitting] = useState(false);
-
-    // State UI
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [viewData, setViewData] = useState<any | null>(null);
-
-    // STATE FORM UPDATE: Tambah response_mapping
-    const [formData, setFormData] = useState({
-        name: '',
-        base_url: '',
-        charge_endpoint: '',
-        auth_type: 'BASIC_AUTH',
-        custom_auth_header: '',
-        server_key: '',
-        merchant_code: '',
-        private_key: '',
-        request_template: '{}',
-        response_mapping: '{}', // BARU
-        webhook_mapping: '{}',
-        channel_mapping: '{}', // BARU: mapping kode channel internal -> kode PG (misal bca -> BCAVA)
-        webhook_secret: '',
-        is_active: true
-    });
+    const [disabledMethods, setDisabledMethods] = useState<string[]>([]);
+    // undefined = lagi lihat daftar, null = tambah gateway baru, object = edit gateway itu
+    const [editing, setEditing] = useState<GatewayRecord | null | undefined>(undefined);
+    const topRef = useRef<HTMLDivElement>(null);
 
     const loadGateways = async () => {
         try {
             const data = await api.fetchCMS('/gateways');
-            setGateways(data);
+            setGateways(Array.isArray(data) ? data : []);
+            // Terpisah biar daftar gateway tetap tampil walau endpoint ini gagal (mis. backend versi lama).
+            api.fetchCMS('/payment-methods/disabled')
+                .then(disabled => setDisabledMethods(Array.isArray(disabled) ? disabled : []))
+                .catch(err => console.warn('Gagal ambil metode bayar yang dimatiin:', err));
         } catch (err) { console.error(err); } finally { setLoading(false); }
     };
 
     useEffect(() => { loadGateways(); }, []);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setSubmitting(true);
+    // Konten dashboard di-scroll di container sendiri (bukan window), jadi scroll pakai elemen.
+    useEffect(() => {
+        topRef.current?.scrollIntoView({ block: 'start' });
+    }, [editing]);
+
+    const handleDelete = async (gw: GatewayRecord) => {
+        if (!confirm(`Hapus gateway ${gw.name}? Endpoint & channel-nya ikut terhapus.`)) return;
         try {
-            if (editingId) {
-                await api.fetchCMS(`/gateways/${editingId}`, 'PUT', formData);
-                setEditingId(null);
-            } else {
-                await api.fetchCMS('/gateways', 'POST', formData);
-            }
-
-            // Reset Form
-            setFormData({
-                name: '', base_url: '', charge_endpoint: '', auth_type: 'BASIC_AUTH',
-                custom_auth_header: '', server_key: '', merchant_code: '', private_key: '',
-                request_template: '{}', response_mapping: '{}', webhook_mapping: '{}',
-                channel_mapping: '{}', webhook_secret: '', is_active: true
-            });
+            await api.fetchCMS(`/gateways/${gw.id}`, 'DELETE');
             loadGateways();
-        } catch (err: any) { alert(err.message); } finally { setSubmitting(false); }
-    };
-
-    const handleEdit = (gw: any) => {
-        setEditingId(gw.id);
-        setFormData({
-            ...gw,
-            // Kosongkan password field saat edit demi keamanan, user hanya isi jika ingin mengubahnya
-            server_key: '',
-            private_key: ''
-        });
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-
-    const handleDelete = async (id: string, name: string) => {
-        if (confirm(`Hapus Gateway ${name}?`)) {
-            try {
-                await api.fetchCMS(`/gateways/${id}`, 'DELETE');
-                loadGateways();
-            } catch (err: any) { alert(err.message); }
+        } catch (err) {
+            alert(err instanceof Error ? err.message : String(err));
         }
     };
 
-    if (loading) return <div className="p-10 text-center text-slate-400 font-medium">Memuat konfigurasi gateway...</div>;
+    const toggleMethod = async (code: string, active: boolean) => {
+        const prev = disabledMethods;
+        setDisabledMethods(active ? prev.filter(c => c !== code) : [...prev, code]);
+        try {
+            await api.fetchCMS(`/payment-methods/${encodeURIComponent(code)}`, 'PUT', { is_active: active });
+        } catch (err) {
+            setDisabledMethods(prev);
+            alert(err instanceof Error ? err.message : String(err));
+        }
+    };
+
+    if (loading) return <PageSkeleton table tableCols={4} />;
+
+    if (editing !== undefined) {
+        return (
+            <div ref={topRef}>
+                <GatewayEditor
+                    key={editing?.id || 'new'}
+                    gateway={editing}
+                    onBack={() => { setEditing(undefined); loadGateways(); }}
+                    onSaved={loadGateways}
+                />
+            </div>
+        );
+    }
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-
-            <div className="flex justify-between items-end">
+        <div ref={topRef} className="space-y-6 animate-in pb-20">
+            <div className="flex flex-wrap justify-between items-end gap-4">
                 <div>
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight">Payment Gateways</h1>
-                    <p className="text-sm text-slate-500 mt-1">Konfigurasi koneksi ke penyedia layanan pembayaran (PG).</p>
+                    <p className="text-sm text-slate-500 mt-1">Koneksi ke penyedia layanan pembayaran (PG). Klik gateway buat ngubah konfigurasinya.</p>
                 </div>
+                <button onClick={() => setEditing(null)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800">
+                    <Plus size={16} /> Tambah Gateway
+                </button>
             </div>
 
-            {/* FORM KONFIGURASI */}
-            <div className={`p-6 md:p-8 rounded-3xl border transition-all ${editingId ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200 shadow-sm'}`}>
-                <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${editingId ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                            {editingId ? <Pencil size={20} /> : <Plus size={20} />}
-                        </div>
-                        <h2 className="text-lg font-bold text-slate-800">
-                            {editingId ? 'Edit Gateway Configuration' : 'Configure New Gateway'}
-                        </h2>
-                    </div>
-                    {editingId && (
-                        <button onClick={() => {
-                            setEditingId(null);
-                            setFormData({ name: '', base_url: '', charge_endpoint: '', auth_type: 'BASIC_AUTH', custom_auth_header: '', server_key: '', merchant_code: '', private_key: '', request_template: '{}', response_mapping: '{}', webhook_mapping: '{}', channel_mapping: '{}', webhook_secret: '', is_active: true });
-                        }} className="text-sm font-bold text-blue-600 hover:underline">
-                            Batal Edit
-                        </button>
-                    )}
+            {gateways.length === 0 ? (
+                <div className="bg-white rounded-3xl border-2 border-dashed border-slate-200 p-12 text-center">
+                    <p className="text-sm text-slate-500 mb-4">Belum ada payment gateway.</p>
+                    <button onClick={() => setEditing(null)} className="text-sm font-bold text-blue-600 hover:underline">+ Tambah gateway pertama</button>
                 </div>
-
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-
-                    {/* KOLOM KIRI: Koneksi Utama & Credentials */}
-                    <div className="space-y-4">
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase ml-1">Gateway Identity</label>
-                            <input required className="w-full border p-3 rounded-xl mt-1.5 outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. Tripay Sandbox" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase ml-1">Base URL</label>
-                            <input required className="w-full border p-3 rounded-xl mt-1.5 outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://api.gateway.com/" value={formData.base_url} onChange={e => setFormData({ ...formData, base_url: e.target.value })} />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Charge Path</label>
-                                <input required className="w-full border p-3 rounded-xl mt-1.5 outline-none focus:ring-2 focus:ring-blue-500" placeholder="transaction/create" value={formData.charge_endpoint} onChange={e => setFormData({ ...formData, charge_endpoint: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Auth Type</label>
-                                <select className="w-full border p-3 rounded-xl mt-1.5 outline-none bg-white" value={formData.auth_type} onChange={e => setFormData({ ...formData, auth_type: e.target.value })}>
-                                    <option value="BASIC_AUTH">Basic Auth</option>
-                                    <option value="BEARER_TOKEN">Bearer Token</option>
-                                    <option value="CUSTOM_HEADER">Custom Header</option>
-                                    <option value="TRIPAY_HMAC">Tripay HMAC</option>
-                                    <option value="IPAYMU_V2">iPaymu Signature V2</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        {/* INPUT CUSTOM HEADER (MUNCUL KALAU DIPILIH) */}
-                        {formData.auth_type === 'CUSTOM_HEADER' && (
-                            <div>
-                                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Custom Auth Header Name</label>
-                                <input required className="w-full border p-3 rounded-xl mt-1.5 outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. va atau signature" value={formData.custom_auth_header} onChange={e => setFormData({ ...formData, custom_auth_header: e.target.value })} />
-                            </div>
-                        )}
-
-                        {/* BOX CREDENTIALS KHUSUS */}
-                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4 mt-2">
-                            <div className="flex items-center gap-2 mb-2">
-                                <Shield size={16} className="text-slate-400" />
-                                <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Gateway Credentials</span>
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-slate-500 ml-1">API Key / Server Key (Encrypted)</label>
-                                <input type="password" required={!editingId} className="w-full border p-2.5 rounded-lg mt-1 outline-none text-sm" placeholder="••••••••••••" value={formData.server_key} onChange={e => setFormData({ ...formData, server_key: e.target.value })} />
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-500 ml-1">Merchant Code</label>
-                                    <input className="w-full border p-2.5 rounded-lg mt-1 outline-none text-sm" placeholder="Opsional (Tripay)" value={formData.merchant_code} onChange={e => setFormData({ ...formData, merchant_code: e.target.value })} />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-500 ml-1">Private Key</label>
-                                    <input type="password" className="w-full border p-2.5 rounded-lg mt-1 outline-none text-sm" placeholder="••••••" value={formData.private_key} onChange={e => setFormData({ ...formData, private_key: e.target.value })} />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* KOLOM KANAN: Mapping & JSON */}
-                    <div className="space-y-4">
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase ml-1">Request Template (JSON)</label>
-                            {/* Diubah jadi h-24 biar muat 3 textarea dengan rapi */}
-                            <textarea className="w-full border p-3 rounded-xl mt-1.5 outline-none font-mono text-xs h-24" value={formData.request_template} onChange={e => setFormData({ ...formData, request_template: e.target.value })} />
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase ml-1">Response Mapping (JSON)</label>
-                            <textarea className="w-full border p-3 rounded-xl mt-1.5 outline-none font-mono text-xs h-24" placeholder='{"pg_transaction_id": "data.sessionId", "checkout_url": "data.url"}' value={formData.response_mapping} onChange={e => setFormData({ ...formData, response_mapping: e.target.value })} />
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase ml-1">Webhook Mapping (JSON)</label>
-                            <textarea className="w-full border p-3 rounded-xl mt-1.5 outline-none font-mono text-xs h-24" value={formData.webhook_mapping} onChange={e => setFormData({ ...formData, webhook_mapping: e.target.value })} />
-                        </div>
-                    </div>
-                  </div>
-
-                  {/* CHANNEL EDITOR — full width biar muat tabel-nya */}
-                  <ChannelEditor
-                      key={editingId || 'new'}
-                      value={formData.channel_mapping}
-                      onChange={next => setFormData(prev => ({ ...prev, channel_mapping: next }))}
-                  />
-
-                  <div className="flex items-end pt-2">
-                      <button type="submit" disabled={submitting} className="w-full h-[52px] bg-slate-900 text-white font-black rounded-2xl hover:bg-slate-800 transition-all shadow-xl flex items-center justify-center gap-2 disabled:opacity-70">
-                          <Save size={20} />
-                          {submitting ? 'Saving...' : editingId ? 'Update Configuration' : 'Save Gateway'}
-                      </button>
-                  </div>
-                </form>
-            </div>
-
-            {/* TABLE LIST GATEWAY */}
-            <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="bg-slate-50 border-b border-slate-100">
-                            <th className="p-5 text-xs font-bold text-slate-400 uppercase tracking-widest">Gateway Provider</th>
-                            <th className="p-5 text-xs font-bold text-slate-400 uppercase tracking-widest">Connection</th>
-                            <th className="p-5 text-xs font-bold text-slate-400 uppercase tracking-widest">Auth Method</th>
-                            <th className="p-5 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                        {gateways.map((gw) => (
-                            <tr key={gw.id} className="hover:bg-slate-50/50 transition-colors">
-                                <td className="p-5">
-                                    <div className="font-bold text-slate-900">{gw.name}</div>
-                                    <div className="text-[10px] text-slate-400 font-mono mt-1 uppercase tracking-tighter">ID: {gw.id.slice(0, 8)}</div>
-                                </td>
-                                <td className="p-5">
-                                    <div className="flex items-center gap-2 text-sm text-slate-600">
-                                        <Globe size={14} className="text-blue-500" />
-                                        {gw.base_url.replace('https://', '')}
-                                    </div>
-                                    <div className="text-[10px] text-slate-400 mt-1 font-bold italic">{gw.charge_endpoint}</div>
-                                </td>
-                                <td className="p-5">
-                                    <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-1 rounded-md border border-slate-200">
-                                        {gw.auth_type}
-                                    </span>
-                                    {gw.merchant_code && (
-                                        <span className="ml-2 bg-indigo-50 text-indigo-600 text-[10px] font-bold px-2 py-1 rounded-md border border-indigo-100">
-                                            Has Merchant Code
-                                        </span>
-                                    )}
-                                </td>
-                                <td className="p-5 text-right">
-                                    <div className="flex justify-end gap-1">
-                                        <button onClick={() => setViewData(gw)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all" title="View Detail"><Eye size={18} /></button>
-                                        <button onClick={() => handleEdit(gw)} className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg transition-all" title="Edit"><Pencil size={18} /></button>
-                                        <button onClick={() => handleDelete(gw.id, gw.name)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all" title="Delete"><Trash2 size={18} /></button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
-            {/* MODAL VIEW DETAIL */}
-            {viewData && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-[32px] p-8 w-full max-w-2xl relative shadow-2xl animate-in zoom-in-95 duration-200">
-                        <button onClick={() => setViewData(null)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-800 p-2"><X size={24} /></button>
-
-                        <div className="flex items-center gap-4 mb-8">
-                            <div className="w-14 h-14 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center shadow-inner"><Settings size={28} /></div>
-                            <div>
-                                <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">{viewData.name}</h2>
-                                <div className="flex items-center gap-2 text-green-500 text-xs font-bold mt-1"><CheckCircle2 size={14} /> ACTIVE CONNECTION</div>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm">
-                            <div className="space-y-4">
-                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase block mb-1">Full API URL</span>
-                                    <code className="text-blue-600 break-all">{viewData.base_url}{viewData.charge_endpoint}</code>
-                                </div>
-                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase block mb-1">Authorization</span>
-                                    <div className="font-bold text-slate-700">{viewData.auth_type}</div>
-                                    {viewData.auth_type === 'CUSTOM_HEADER' && (
-                                        <div className="text-[10px] text-slate-500 mt-1">Header: {viewData.custom_auth_header}</div>
-                                    )}
-                                    <div className="text-[10px] text-slate-400 mt-1 italic">Keys are Encrypted (AES-256)</div>
-                                    {viewData.merchant_code && (
-                                        <div className="mt-2 pt-2 border-t border-slate-200">
-                                            <span className="text-[10px] font-black text-slate-400 uppercase block mb-1">Merchant Code</span>
-                                            <code className="font-mono text-slate-800">{viewData.merchant_code}</code>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase block mb-1">Request JSON Sample</span>
-                                    <pre className="text-[10px] font-mono text-slate-600 overflow-x-auto max-h-24">{viewData.request_template}</pre>
-                                </div>
-                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase block mb-1">Response Mapping</span>
-                                    <pre className="text-[10px] font-mono text-slate-600 overflow-x-auto max-h-24">{viewData.response_mapping}</pre>
-                                </div>
-                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase block mb-1">Webhook Mapping</span>
-                                    <pre className="text-[10px] font-mono text-slate-600 overflow-x-auto max-h-24">{viewData.webhook_mapping}</pre>
-                                </div>
-                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase block mb-1">Channel Mapping</span>
-                                    <pre className="text-[10px] font-mono text-slate-600 overflow-x-auto max-h-24">{viewData.channel_mapping || '{}'}</pre>
-                                </div>
-                            </div>
-                        </div>
-
-                        <button onClick={() => setViewData(null)} className="w-full mt-10 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200">
-                            Close Detail
-                        </button>
+            ) : (
+                <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+                    <div className="table-wrap">
+                        <table className="data-table text-left">
+                            <thead>
+                                <tr className="bg-slate-50 border-b border-slate-100">
+                                    <th className="p-5 text-xs font-bold text-slate-400 uppercase tracking-widest w-24">Prioritas</th>
+                                    <th className="p-5 text-xs font-bold text-slate-400 uppercase tracking-widest">Gateway</th>
+                                    <th className="p-5 text-xs font-bold text-slate-400 uppercase tracking-widest">Endpoint</th>
+                                    <th className="p-5 text-xs font-bold text-slate-400 uppercase tracking-widest">Autentikasi</th>
+                                    <th className="p-5 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50 stagger">
+                                {gateways.map(gw => (
+                                    <tr key={gw.id} onClick={() => setEditing(gw)} className="hover:bg-slate-50 cursor-pointer">
+                                        <td className="p-5 font-mono text-sm font-bold text-slate-700" data-label="Prioritas">{gw.priority ?? 0}</td>
+                                        <td className="p-5">
+                                            <div className="min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-slate-900">{gw.name}</span>
+                                                {gw.is_active === false && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">NONAKTIF</span>}
+                                            </div>
+                                            <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
+                                                <Globe size={12} className="text-blue-500" />
+                                                <span className="break-all">{gw.base_url}</span>
+                                            </div>
+                                            </div>
+                                        </td>
+                                        <td className="p-5" data-label="Endpoint">
+                                            <div className="flex flex-wrap gap-1">
+                                                {endpointsFromGateway(gw).map(ep => (
+                                                    <span key={ep.uid} className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${ep.is_active ? 'bg-slate-50 text-slate-600 border-slate-200' : 'bg-white text-slate-300 border-slate-100 line-through'}`}>
+                                                        {autoEndpointName(ep) || ep.name}
+                                                    </span>
+                                                ))}
+                                                {endpointsFromGateway(gw).length === 0 && <span className="text-xs text-amber-600">Belum ada endpoint</span>}
+                                            </div>
+                                        </td>
+                                        <td className="p-5" data-label="Auth">
+                                            <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-1 rounded-md border border-slate-200">
+                                                {authConfig(gw.auth_type).label}
+                                            </span>
+                                        </td>
+                                        <td className="p-5 text-right" data-label="Aksi">
+                                            <div className="flex justify-end gap-1" onClick={e => e.stopPropagation()}>
+                                                <button onClick={() => setEditing(gw)} className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg" title="Edit"><Pencil size={18} /></button>
+                                                <button onClick={() => handleDelete(gw)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg" title="Hapus"><Trash2 size={18} /></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             )}
 
+            {gateways.length > 0 && <RoutingOverview gateways={gateways} disabled={disabledMethods} onToggle={toggleMethod} />}
+        </div>
+    );
+}
+
+function RoutingOverview({ gateways, disabled, onToggle }: { gateways: GatewayRecord[]; disabled: string[]; onToggle: (code: string, active: boolean) => void }) {
+    const routing = buildRouting(gateways);
+    return (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 md:p-6">
+            <h2 className="text-base font-black text-slate-900">Metode bayar yang bisa dipakai merchant</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+                Merchant cuma kirim kode metode bayar (mis. <code>bri</code>). Dupay pakai gateway pertama yang aktif, punya channel itu, & nominalnya masuk batas min/max channel.
+                Gateway berikutnya cuma dipakai kalau yang sebelumnya nggak memenuhi syarat itu, bukan kalau PG-nya error.
+                Matiin toggle buat nyembunyiin metode bayar dari merchant di semua gateway (setting channel di gateway nggak berubah).
+            </p>
+            {routing.length === 0 ? (
+                <p className="text-sm text-amber-600 mt-4">Belum ada channel aktif di gateway mana pun. Isi Daftar Channel di gateway dulu.</p>
+            ) : (
+                <div className="table-wrap mt-4">
+                    <table className="data-table text-left text-sm">
+                        <thead>
+                            <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                                <th className="py-2 pr-4 w-16">Aktif</th>
+                                <th className="py-2 pr-4">Kode</th>
+                                <th className="py-2 pr-4">Metode bayar</th>
+                                <th className="py-2 pr-4">Dipakai</th>
+                                <th className="py-2">Gateway lain</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {routing.map(([code, row]) => {
+                                const active = !disabled.includes(code);
+                                return (
+                                <tr key={code} className={`transition-opacity duration-200 ${active ? '' : 'opacity-50'}`}>
+                                    <td className="py-2 pr-4" data-label="Aktif">
+                                        <button
+                                            type="button"
+                                            role="switch"
+                                            aria-checked={active}
+                                            title={active ? 'Matiin metode bayar ini' : 'Nyalain metode bayar ini'}
+                                            onClick={() => onToggle(code, !active)}
+                                            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ${active ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                        >
+                                            <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${active ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                                        </button>
+                                    </td>
+                                    <td className="py-2 pr-4 font-mono text-xs" data-label="Kode">{code}</td>
+                                    <td className="py-2 pr-4" data-label="Metode">{row.label}</td>
+                                    <td className="py-2 pr-4 font-bold text-slate-800" data-label="Dipakai">{row.gateways[0]}</td>
+                                    <td className="py-2 text-slate-500" data-label="Gateway lain">{row.gateways.slice(1).join(', ') || '-'}</td>
+                                </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </div>
     );
 }
