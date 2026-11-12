@@ -60,7 +60,7 @@ export function PasswordInput(props: React.InputHTMLAttributes<HTMLInputElement>
     const [shown, setShown] = useState(false);
     return (
         <div className="relative">
-            <input {...props} type={shown ? "text" : "password"} className={`${inputClass} h-11 pr-10`} />
+            <input {...props} type={shown ? "text" : "password"} className={`${inputClass} sm:h-11 pr-10`} />
             <button
                 type="button"
                 onClick={() => setShown(!shown)}

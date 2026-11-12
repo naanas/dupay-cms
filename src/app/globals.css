@@ -102,14 +102,17 @@ kbd {
   to { opacity: 1; transform: none; }
 }
 
-/* Konten masuk (dipakai tiap halaman setelah data kebaca). */
-.animate-in { animation: dp-enter 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+/* Konten masuk (dipakai tiap halaman setelah data kebaca).
+   fill-mode "backwards" (bukan "both"): setelah selesai, transform dilepas. Elemen yang masih
+   nahan animasi transform jadi containing block buat anak position:fixed, jadi modal/drawer
+   di dalamnya ikut "terkurung" di area konten. */
+.animate-in { animation: dp-enter 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
 
 /* Pindah halaman: cuma fade, biar nggak dobel geser sama .animate-in. */
-.page-enter { animation: dp-fade 0.3s ease-out both; }
+.page-enter { animation: dp-fade 0.3s ease-out backwards; }
 
 /* Anak-anaknya muncul bergantian (baris tabel, kartu). */
-.stagger > * { animation: dp-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.stagger > * { animation: dp-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
 .stagger > :nth-child(2) { animation-delay: 30ms; }
 .stagger > :nth-child(3) { animation-delay: 60ms; }
 .stagger > :nth-child(4) { animation-delay: 90ms; }

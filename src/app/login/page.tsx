@@ -42,7 +42,7 @@ export default function LoginPage() {
             <form onSubmit={handleLogin} className="space-y-4">
                 {error && <Notice tone="error">{error}</Notice>}
                 <Field label="Username">
-                    <input type="text" autoComplete="username" autoFocus className={`${inputClass} h-11`} value={username} onChange={(e) => setUsername(e.target.value)} required />
+                    <input type="text" autoComplete="username" autoFocus className={`${inputClass} sm:h-11`} value={username} onChange={(e) => setUsername(e.target.value)} required />
                 </Field>
                 <Field label="Password">
                     <PasswordInput autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />

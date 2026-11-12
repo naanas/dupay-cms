@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { ArrowLeft, Save, Plus, Copy, Check, Trash2, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { api, API_BASE } from '../../../lib/api';
 import { confirmDialog } from '../../../components/overlays';
+import { Portal } from '../../../components/ui';
 import ChannelEditor from './ChannelEditor';
 import EndpointCard from './EndpointCard';
 import {
@@ -580,6 +581,7 @@ export default function GatewayEditor({ gateway, onBack, onSaved }: Props) {
             </Section>
 
             {/* Bar simpan melayang: di HP di atas tab bar, di desktop di bawah layar. */}
+            <Portal>
             <div className="fixed z-30 inset-x-3 md:inset-x-6 bottom-[calc(6rem+env(safe-area-inset-bottom))] md:bottom-4">
                 <div className="glass mx-auto max-w-6xl rounded-2xl border border-slate-200/80 shadow-float px-3 py-2.5 flex flex-wrap items-center gap-2">
                     <button type="button" onClick={back} className="h-10 px-4 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-900/5">Kembali</button>
@@ -593,6 +595,7 @@ export default function GatewayEditor({ gateway, onBack, onSaved }: Props) {
                     </button>
                 </div>
             </div>
+            </Portal>
         </div>
     );
 }

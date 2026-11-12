@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from "lucide-react";
+import { Portal } from "./ui";
 
 type ToastTone = "success" | "error" | "info";
 type ToastItem = { id: number; tone: ToastTone; title: string; description?: string };
@@ -69,7 +70,7 @@ const TOAST_ICON = {
 export function OverlayHost() {
     const s = useSyncExternalStore(subscribe, () => state, () => state);
     return (
-        <>
+        <Portal>
             <div
                 className="fixed z-[70] inset-x-3 top-3 sm:inset-x-auto sm:right-4 sm:top-4 sm:w-96 flex flex-col gap-2 pointer-events-none"
                 role="region"
@@ -90,7 +91,7 @@ export function OverlayHost() {
                 ))}
             </div>
             {s.confirm && <ConfirmModal item={s.confirm} />}
-        </>
+        </Portal>
     );
 }
 

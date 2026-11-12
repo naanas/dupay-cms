@@ -8,6 +8,7 @@ import { ArrowRight, Clock, CornerDownLeft, LogOut, Plus, Search } from "lucide-
 import type { LucideIcon } from "lucide-react";
 import { fireIntent, NAV } from "../lib/nav";
 import type { Role } from "../lib/session";
+import { Portal } from "./ui";
 
 export type Command = {
     id: string;
@@ -132,7 +133,8 @@ export default function CommandPalette({ role, onClose, onLogout }: { role: Role
 
     let lastGroup = "";
     return (
-        <div className="modal-backdrop fixed inset-0 z-[60] bg-slate-950/30 backdrop-blur-[2px] flex items-start justify-center p-3 pt-[12vh]" onClick={onClose}>
+        <Portal>
+        <div className="modal-backdrop fixed inset-0 z-[60] bg-slate-950/30 backdrop-blur-[2px] flex items-start justify-center p-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-[12vh]" onClick={onClose}>
             <div
                 className="modal-panel w-full max-w-xl bg-white rounded-2xl shadow-pop border border-slate-200/80 overflow-hidden"
                 onClick={e => e.stopPropagation()}
@@ -148,7 +150,7 @@ export default function CommandPalette({ role, onClose, onLogout }: { role: Role
                         onChange={e => { setQuery(e.target.value); setActive(0); }}
                         onKeyDown={onKeyDown}
                         placeholder="Cari halaman atau aksi…"
-                        className="flex-1 h-14 bg-transparent text-[15px] text-slate-900 placeholder:text-slate-400 outline-none"
+                        className="flex-1 h-14 bg-transparent text-base sm:text-[15px] text-slate-900 placeholder:text-slate-400 outline-none"
                         role="combobox"
                         aria-expanded="true"
                         aria-controls="palette-list"
@@ -157,7 +159,7 @@ export default function CommandPalette({ role, onClose, onLogout }: { role: Role
                     <kbd>Esc</kbd>
                 </div>
 
-                <div ref={listRef} id="palette-list" role="listbox" className="max-h-[50vh] overflow-y-auto p-2">
+                <div ref={listRef} id="palette-list" role="listbox" className="max-h-[60dvh] sm:max-h-[50vh] overflow-y-auto overscroll-contain p-2">
                     {results.length === 0 && (
                         <div className="px-4 py-10 text-center">
                             <p className="text-sm font-medium text-slate-900">Nggak ada yang cocok sama “{query}”</p>
@@ -202,5 +204,6 @@ export default function CommandPalette({ role, onClose, onLogout }: { role: Role
                 </div>
             </div>
         </div>
+        </Portal>
     );
 }

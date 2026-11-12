@@ -46,15 +46,15 @@ export default function DocsPage() {
     const sample = methods[0]?.code || "bri";
 
     return (
-        <div className="max-w-4xl mx-auto space-y-14 animate-in pb-32 text-left">
+        <div className="max-w-4xl mx-auto space-y-12 md:space-y-14 animate-in text-left">
 
             {/* HERO */}
             <div className="space-y-4 border-b border-slate-200 pb-8">
-                <div className="flex items-center gap-2 text-brand-600 text-xs font-bold uppercase tracking-widest">
+                <div className="flex items-center gap-2 text-brand-600 text-xs font-semibold uppercase tracking-widest">
                     <BookOpen size={14} /> Dokumentasi API Merchant
                 </div>
-                <h1 className="text-4xl font-semibold text-slate-900 tracking-tight">Integrasi Dupay</h1>
-                <p className="text-lg text-slate-500 leading-relaxed">
+                <h1 className="text-3xl md:text-4xl font-semibold text-slate-900 tracking-tight">Integrasi Dupay</h1>
+                <p className="text-base md:text-lg text-slate-500 leading-relaxed">
                     Satu API buat semua metode bayar. Merchant cukup kirim <strong>kode metode bayar</strong> (mis. <code>{sample}</code>),
                     Dupay yang milih payment gateway, bikin tagihan, & ngabarin hasilnya lewat webhook.
                 </p>
@@ -64,7 +64,7 @@ export default function DocsPage() {
                 </div>
                 <nav className="flex flex-wrap gap-2 pt-2">
                     {SECTIONS.map(s => (
-                        <a key={s.id} href={`#${s.id}`} className="text-xs font-bold px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">
+                        <a key={s.id} href={`#${s.id}`} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">
                             {s.label}
                         </a>
                     ))}
@@ -81,9 +81,9 @@ export default function DocsPage() {
                         ["Terima hasil", <>Dupay ngirim webhook ke <Code>webhook_url</Code> merchant waktu status berubah. Kalau ragu, cek pakai <Code>GET /v1/charge/:id</Code> atau <Code>POST /v1/charge/:id/sync</Code>.</>],
                     ].map(([title, body], i) => (
                         <li key={i} className="flex gap-4">
-                            <span className="flex-shrink-0 w-7 h-7 rounded-full bg-slate-900 text-white text-sm font-bold flex items-center justify-center">{i + 1}</span>
+                            <span className="flex-shrink-0 w-7 h-7 rounded-full bg-slate-900 text-white text-sm font-semibold flex items-center justify-center">{i + 1}</span>
                             <div>
-                                <div className="font-bold text-slate-800">{title}</div>
+                                <div className="font-semibold text-slate-800">{title}</div>
                                 <div className="text-sm text-slate-600 mt-0.5">{body}</div>
                             </div>
                         </li>
@@ -398,10 +398,10 @@ echo json_encode(["success" => true]);`,
                 />
             </Section>
 
-            <div className="bg-amber-50 p-6 rounded-2xl border border-amber-200 flex gap-4 items-start shadow-sm">
+            <div className="bg-amber-50 p-6 rounded-2xl border border-amber-200 flex gap-4 items-start shadow-soft">
                 <AlertTriangle className="text-amber-500 flex-shrink-0 mt-1" size={24} />
                 <div>
-                    <h4 className="font-bold text-amber-900">Peringatan keamanan</h4>
+                    <h4 className="font-semibold text-amber-900">Peringatan keamanan</h4>
                     <p className="text-amber-800 text-sm mt-1.5 leading-relaxed">
                         Bikin <strong>X-Signature</strong> & panggil <Code>/v1/charge</Code> cuma dari <strong>backend</strong> merchant. Jangan pernah
                         taruh <Code>Secret Key</Code> di browser atau aplikasi mobile. Satu-satunya endpoint yang aman dipanggil dari frontend adalah <Code>GET /v1/channels</Code>.
@@ -416,8 +416,8 @@ echo json_encode(["success" => true]);`,
 
 function Section({ id, icon, title, children }: { id: string; icon: React.ReactNode; title: string; children: React.ReactNode }) {
     return (
-        <section id={id} className="scroll-mt-6 space-y-4 text-slate-600 text-sm leading-relaxed">
-            <h2 className="flex items-center gap-2.5 text-2xl font-bold text-slate-800">
+        <section id={id} className="scroll-mt-24 space-y-4 text-slate-600 text-sm leading-relaxed">
+            <h2 className="flex items-center gap-2.5 text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
                 <span className="text-brand-500">{icon}</span> {title}
             </h2>
             {children}
@@ -439,8 +439,8 @@ function Note({ children, warn }: { children: React.ReactNode; warn?: boolean })
 
 function Card({ icon, color, title, children }: { icon: React.ReactNode; color: string; title: string; children: React.ReactNode }) {
     return (
-        <div className="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
-            <div className={`flex items-center gap-2 mb-2 font-bold ${color}`}>{icon} {title}</div>
+        <div className="p-4 bg-white border border-slate-100 rounded-2xl shadow-soft">
+            <div className={`flex items-center gap-2 mb-2 font-semibold ${color}`}>{icon} {title}</div>
             <p className="text-xs text-slate-500 leading-relaxed">{children}</p>
         </div>
     );
@@ -448,18 +448,18 @@ function Card({ icon, color, title, children }: { icon: React.ReactNode; color: 
 
 function Table({ head, rows, mono, monoFirst }: { head: string[]; rows: string[][]; mono?: boolean; monoFirst?: boolean }) {
     return (
-        <div className="table-wrap bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+        <div className="table-wrap bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-soft">
             <table className="data-table text-sm text-left">
                 <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-500">
-                        {head.map(h => <th key={h} className="p-3 font-bold uppercase text-[10px] tracking-wider">{h}</th>)}
+                        {head.map(h => <th key={h} className="p-3 font-semibold uppercase text-[10px] tracking-wider">{h}</th>)}
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                     {rows.map((r, i) => (
                         <tr key={i}>
                             {r.map((cell, j) => (
-                                <td key={j} data-label={j === 0 ? undefined : head[j]} className={`p-3 align-top ${j === 0 && (mono || monoFirst) ? "font-mono text-xs font-bold text-brand-600" : "text-slate-600"}`}>{cell}</td>
+                                <td key={j} data-label={j === 0 ? undefined : head[j]} className={`p-3 align-top ${j === 0 && (mono || monoFirst) ? "font-mono text-xs font-semibold text-brand-600" : "text-slate-600"}`}>{cell}</td>
                             ))}
                         </tr>
                     ))}
@@ -489,17 +489,20 @@ function InlineCopy({ text }: { text: string }) {
     );
 }
 
-function CodeBlock({ code, label }: { code: string; label?: string }) {
+// Blok kode gelap. header = isi kiri bar atas (label atau tab bahasa).
+function CodeBlock({ code, label, header }: { code: string; label?: string; header?: React.ReactNode }) {
     const { copied, copy } = useCopy();
     return (
-        <div className="bg-slate-900 rounded-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{label || ""}</span>
-                <button onClick={() => copy(code)} className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-white">
-                    {copied ? <><Check size={12} /> Disalin</> : <><Copy size={12} /> Salin</>}
+        <div className="bg-slate-950 rounded-2xl overflow-hidden ring-1 ring-slate-900/5 shadow-soft">
+            <div className="flex items-center justify-between gap-3 px-2 h-11 border-b border-white/[0.06] bg-white/[0.02]">
+                <div className="min-w-0 flex-1 overflow-x-auto no-scrollbar pl-2">
+                    {header ?? <span className="text-[11px] font-medium text-slate-500">{label || ""}</span>}
+                </div>
+                <button onClick={() => copy(code)} className="shrink-0 flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11px] font-medium text-slate-400 hover:text-white hover:bg-white/10">
+                    {copied ? <><Check size={12} className="text-emerald-400" /> Disalin</> : <><Copy size={12} /> Salin</>}
                 </button>
             </div>
-            <pre className="p-4 text-brand-200 font-mono text-xs leading-relaxed overflow-x-auto">{code}</pre>
+            <pre className="p-4 text-slate-200 font-mono text-xs leading-relaxed overflow-x-auto">{code}</pre>
         </div>
     );
 }
@@ -508,17 +511,24 @@ function CodeTabs({ tabs }: { tabs: Record<string, string> }) {
     const names = Object.keys(tabs);
     const [active, setActive] = useState(names[0]);
     return (
-        <div className="space-y-0">
-            <div className="flex gap-1">
-                {names.map(n => (
-                    <button key={n} onClick={() => setActive(n)}
-                        className={`px-3 py-1.5 rounded-t-lg text-xs font-bold ${active === n ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
-                        {n}
-                    </button>
-                ))}
-            </div>
-            <CodeBlock code={tabs[active]} />
-        </div>
+        <CodeBlock
+            code={tabs[active]}
+            header={
+                <div className="flex items-center gap-1" role="tablist">
+                    {names.map(n => (
+                        <button
+                            key={n}
+                            role="tab"
+                            aria-selected={active === n}
+                            onClick={() => setActive(n)}
+                            className={`shrink-0 h-7 px-2.5 rounded-md text-xs font-medium transition-colors ${active === n ? "bg-white/10 text-white" : "text-slate-500 hover:text-slate-200"}`}
+                        >
+                            {n}
+                        </button>
+                    ))}
+                </div>
+            }
+        />
     );
 }
 
@@ -532,11 +542,11 @@ function Endpoint({ method, path, desc, auth = true, fields, request, response, 
     fields?: string[][]; request?: string; response: string; note?: string;
 }) {
     return (
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-sm space-y-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-soft space-y-4">
             <div className="flex flex-wrap items-center gap-2">
                 <span className={`text-[11px] font-semibold px-2 py-1 rounded-md ${METHOD_STYLE[method]}`}>{method}</span>
-                <code className="font-mono font-bold text-slate-900 break-all">{path}</code>
-                <span className={`ml-auto text-[10px] font-bold px-2 py-1 rounded-full border ${auth ? "bg-red-50 text-red-600 border-red-100" : "bg-slate-50 text-slate-500 border-slate-200"}`}>
+                <code className="font-mono font-semibold text-slate-900 break-all">{path}</code>
+                <span className={`ml-auto text-[10px] font-semibold px-2 py-1 rounded-full border ${auth ? "bg-red-50 text-red-600 border-red-100" : "bg-slate-50 text-slate-500 border-slate-200"}`}>
                     {auth ? "Wajib signature" : "Publik"}
                 </span>
             </div>

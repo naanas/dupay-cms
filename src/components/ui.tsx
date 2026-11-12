@@ -2,7 +2,8 @@
 
 // Komponen kecil yang dipakai bareng halaman-halaman dashboard.
 
-import { forwardRef, useEffect, useState } from "react";
+import { forwardRef, useEffect, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { Check, Copy, Eye, EyeOff, Loader2, Search, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -158,7 +159,7 @@ export function StatCard({ label, value, hint, icon: Icon, tone = "slate", highl
                     </span>
                 )}
             </div>
-            <div className={`relative tabular text-xl md:text-2xl font-semibold tracking-tight mt-2 ${highlight ? "text-white" : "text-slate-900"}`}>{value}</div>
+            <div className={`relative tabular text-lg sm:text-xl md:text-2xl font-semibold tracking-tight mt-2 break-words ${highlight ? "text-white" : "text-slate-900"}`}>{value}</div>
             {hint && <div className={`relative text-[11px] mt-1 ${highlight ? "text-slate-400" : "text-slate-400"}`}>{hint}</div>}
         </div>
     );
@@ -191,8 +192,9 @@ export function Notice({ tone = "info", children }: { tone?: "info" | "success" 
 
 // ---- Form ----
 
+// text-base di HP: input < 16px bikin Safari iOS nge-zoom halaman waktu fokus.
 export const inputClass =
-    "w-full h-10 border border-slate-200 bg-white px-3 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-shadow focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10 disabled:bg-slate-50 disabled:text-slate-500";
+    "w-full h-11 sm:h-10 border border-slate-200 bg-white px-3 rounded-xl text-base sm:text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-shadow focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10 disabled:bg-slate-50 disabled:text-slate-500";
 
 export function Field({ label, hint, wide, children, className = "" }: { label: React.ReactNode; hint?: React.ReactNode; wide?: boolean; children: React.ReactNode; className?: string }) {
     return (
@@ -387,6 +389,14 @@ export function PageSkeleton({ stats, table, panels, tableCols }: { stats?: numb
 
 // ---- Modal & Drawer ----
 
+// Render ke <body>: overlay fixed nggak boleh tinggal di dalam elemen ber-transform/filter
+// (mis. wrapper halaman yang lagi animasi), nanti ukurannya ngikut wrapper, bukan layar.
+const noop = () => () => {};
+export function Portal({ children }: { children: React.ReactNode }) {
+    const mounted = useSyncExternalStore(noop, () => true, () => false);
+    return mounted ? createPortal(children, document.body) : null;
+}
+
 function useEscape(onClose: () => void) {
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -417,11 +427,12 @@ function OverlayHead({ title, subtitle, onClose }: { title?: React.ReactNode; su
 export function Modal({ onClose, children, className = "max-w-lg", title, subtitle }: { onClose: () => void; children: React.ReactNode; className?: string; title?: React.ReactNode; subtitle?: React.ReactNode }) {
     useEscape(onClose);
     return (
+        <Portal>
         <div className="modal-backdrop fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/40 backdrop-blur-[2px] sm:p-4" onClick={onClose}>
             <div
                 role="dialog"
                 aria-modal="true"
-                className={`modal-panel bg-white rounded-t-3xl sm:rounded-2xl p-6 md:p-7 pb-[max(1.5rem,env(safe-area-inset-bottom))] w-full relative shadow-pop max-h-[92vh] overflow-y-auto ${className}`}
+                className={`modal-panel bg-white rounded-t-3xl sm:rounded-2xl p-5 sm:p-6 md:p-7 pb-[max(1.5rem,env(safe-area-inset-bottom))] w-full relative shadow-pop max-h-[92dvh] overflow-y-auto overscroll-contain ${className}`}
                 onClick={e => e.stopPropagation()}
             >
                 <div className="sm:hidden mx-auto -mt-2 mb-4 h-1 w-10 rounded-full bg-slate-200" aria-hidden />
@@ -429,6 +440,7 @@ export function Modal({ onClose, children, className = "max-w-lg", title, subtit
                 {children}
             </div>
         </div>
+        </Portal>
     );
 }
 
@@ -436,20 +448,22 @@ export function Modal({ onClose, children, className = "max-w-lg", title, subtit
 export function Drawer({ onClose, children, title, subtitle, footer, width = "sm:max-w-xl" }: { onClose: () => void; children: React.ReactNode; title?: React.ReactNode; subtitle?: React.ReactNode; footer?: React.ReactNode; width?: string }) {
     useEscape(onClose);
     return (
+        <Portal>
         <div className="modal-backdrop fixed inset-0 z-50 flex items-end sm:items-stretch sm:justify-end bg-slate-950/40 backdrop-blur-[2px]" onClick={onClose}>
             <div
                 role="dialog"
                 aria-modal="true"
-                className={`drawer-panel bg-white w-full ${width} max-h-[92vh] sm:max-h-none sm:h-full rounded-t-3xl sm:rounded-none sm:rounded-l-2xl shadow-pop flex flex-col`}
+                className={`drawer-panel bg-white w-full ${width} max-h-[92dvh] sm:max-h-none sm:h-full rounded-t-3xl sm:rounded-none sm:rounded-l-2xl shadow-pop flex flex-col min-h-0`}
                 onClick={e => e.stopPropagation()}
             >
                 <div className="sm:hidden mx-auto mt-3 h-1 w-10 rounded-full bg-slate-200" aria-hidden />
-                <div className="px-6 pt-5 sm:pt-6">
+                <div className="px-5 sm:px-6 pt-4 sm:pt-6 shrink-0">
                     <OverlayHead title={title} subtitle={subtitle} onClose={onClose} />
                 </div>
-                <div className="flex-1 overflow-y-auto px-6 pb-6">{children}</div>
-                {footer && <div className="border-t border-slate-100 px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex items-center justify-end gap-2 bg-slate-50/60">{footer}</div>}
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 sm:px-6 pb-6">{children}</div>
+                {footer && <div className="shrink-0 border-t border-slate-100 px-5 sm:px-6 py-3 sm:py-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-wrap items-center justify-end gap-2 bg-slate-50/60 [&>button]:flex-1 sm:[&>button]:flex-none">{footer}</div>}
             </div>
         </div>
+        </Portal>
     );
 }

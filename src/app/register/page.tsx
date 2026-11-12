@@ -45,7 +45,7 @@ export default function RegisterPage() {
         }
     };
 
-    const input = `${inputClass} h-11`;
+    const input = `${inputClass} sm:h-11`;
 
     if (done) {
         return (
