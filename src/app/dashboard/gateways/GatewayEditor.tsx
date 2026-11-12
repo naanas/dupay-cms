@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeft, Save, Plus, Copy, Check, Trash2, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { api, API_BASE } from '../../../lib/api';
+import { confirmDialog } from '../../../components/overlays';
 import ChannelEditor from './ChannelEditor';
 import EndpointCard from './EndpointCard';
 import {
@@ -216,8 +217,14 @@ export default function GatewayEditor({ gateway, onBack, onSaved }: Props) {
         }
     };
 
-    const back = () => {
-        if (dirty && !confirm('Ada perubahan yang belum disimpan. Tetap keluar?')) return;
+    const back = async () => {
+        if (dirty && !(await confirmDialog({
+            title: 'Keluar tanpa menyimpan?',
+            description: 'Perubahan di gateway ini bakal hilang.',
+            confirmLabel: 'Keluar',
+            cancelLabel: 'Lanjut edit',
+            tone: 'danger',
+        }))) return;
         onBack();
     };
 
@@ -269,8 +276,13 @@ export default function GatewayEditor({ gateway, onBack, onSaved }: Props) {
         set({ endpoints: [...form.endpoints, emptyEndpoint(type, freeScopes(type)[0])] });
     };
 
-    const removeChannels = () => {
-        if (hasChannels(form.channel_mapping) && !confirm('Hapus Daftar Channel? Tabel channel ikut dikosongin waktu disimpan.')) return;
+    const removeChannels = async () => {
+        if (hasChannels(form.channel_mapping) && !(await confirmDialog({
+            title: 'Hapus Daftar Channel?',
+            description: 'Tabel channel ikut dikosongin waktu disimpan.',
+            confirmLabel: 'Hapus',
+            tone: 'danger',
+        }))) return;
         set({ showChannels: false, endpoints: form.endpoints.filter(ep => ep.action !== 'channels') });
     };
 
@@ -285,8 +297,8 @@ export default function GatewayEditor({ gateway, onBack, onSaved }: Props) {
 
     const cardProps = { getDraft: toPayload, channelCodes };
 
-    const inputCls = 'w-full border border-slate-200 p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white';
-    const labelCls = 'text-xs font-bold text-slate-600';
+    const inputCls = 'w-full border border-slate-200 px-3 py-2.5 rounded-xl text-sm outline-none transition-shadow focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10 bg-white';
+    const labelCls = 'text-xs font-medium text-slate-600';
     const hintCls = 'text-[11px] text-slate-400 mt-1';
 
     const fetchDisabledReason = !channelsEp
@@ -294,14 +306,14 @@ export default function GatewayEditor({ gateway, onBack, onSaved }: Props) {
         : !channelsEp.path.trim() ? 'isi path API daftar channel dulu' : undefined;
 
     return (
-        <div className="space-y-6 pb-24">
-            <div className="flex items-center gap-3">
-                <button type="button" onClick={back} className="p-2 rounded-xl hover:bg-white border border-transparent hover:border-slate-200 text-slate-600" title="Kembali">
-                    <ArrowLeft size={20} />
+        <div className="space-y-6 pb-44 md:pb-24 animate-in">
+            <div className="flex items-start gap-3">
+                <button type="button" onClick={back} className="mt-0.5 w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-white border border-slate-200 shadow-soft text-slate-600 hover:text-slate-900" title="Kembali" aria-label="Kembali">
+                    <ArrowLeft size={18} />
                 </button>
                 <div>
-                    <h1 className="text-2xl font-black text-slate-900 tracking-tight">{id ? `Edit ${form.name || 'Gateway'}` : 'Tambah Payment Gateway'}</h1>
-                    <p className="text-sm text-slate-500">Isi Koneksi & Autentikasi, lalu tambah endpoint yang dibutuhin. Semua endpoint bisa di-Test sebelum disimpan.</p>
+                    <h1 className="text-2xl md:text-[28px] font-semibold text-slate-900 tracking-tight leading-tight">{id ? `Edit ${form.name || 'Gateway'}` : 'Tambah Payment Gateway'}</h1>
+                    <p className="text-sm text-slate-500 mt-1">Isi Koneksi & Autentikasi, lalu tambah endpoint yang dibutuhin. Semua endpoint bisa di-Test sebelum disimpan.</p>
                 </div>
             </div>
 
@@ -504,7 +516,7 @@ export default function GatewayEditor({ gateway, onBack, onSaved }: Props) {
                                     onRemove={() => removeEndpoint(channelsEp.uid)}
                                 />
                             ) : (
-                                <button type="button" onClick={() => set({ endpoints: [...form.endpoints, emptyEndpoint('channels')] })} className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:underline">
+                                <button type="button" onClick={() => set({ endpoints: [...form.endpoints, emptyEndpoint('channels')] })} className="flex items-center gap-1 text-xs font-bold text-brand-600 hover:underline">
                                     <Plus size={13} /> PG punya API daftar channel? Tambahin biar tabel bisa diisi otomatis (opsional)
                                 </button>
                             )}
@@ -536,9 +548,9 @@ export default function GatewayEditor({ gateway, onBack, onSaved }: Props) {
 
                     {/* PEMILIH JENIS ENDPOINT */}
                     {pickerOpen ? (
-                        <div className="border border-blue-200 bg-blue-50/50 rounded-2xl p-4">
+                        <div className="border border-brand-200 bg-brand-50/50 rounded-2xl p-4">
                             <div className="flex items-center justify-between mb-3">
-                                <span className="text-xs font-black text-slate-700 uppercase">Pilih jenis endpoint</span>
+                                <span className="text-xs font-semibold text-slate-700 uppercase">Pilih jenis endpoint</span>
                                 <button type="button" onClick={() => setPickerOpen(false)} className="text-slate-400 hover:text-slate-700"><X size={16} /></button>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -550,7 +562,7 @@ export default function GatewayEditor({ gateway, onBack, onSaved }: Props) {
                                             type="button"
                                             disabled={!available}
                                             onClick={() => addType(t.type)}
-                                            className="text-left bg-white border border-slate-200 rounded-xl p-3 hover:border-blue-400 hover:shadow-sm disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:shadow-none"
+                                            className="text-left bg-white border border-slate-200 rounded-xl p-3 hover:border-brand-400 hover:shadow-sm disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:shadow-none"
                                         >
                                             <div className="text-sm font-bold text-slate-800">{t.label}</div>
                                             <div className="text-[11px] text-slate-500 mt-0.5">{available ? t.description : 'Udah ditambahin.'}</div>
@@ -560,25 +572,25 @@ export default function GatewayEditor({ gateway, onBack, onSaved }: Props) {
                             </div>
                         </div>
                     ) : (
-                        <button type="button" onClick={() => setPickerOpen(true)} className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-slate-300 text-sm font-bold text-slate-600 hover:border-blue-400 hover:text-blue-600">
+                        <button type="button" onClick={() => setPickerOpen(true)} className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-slate-300 text-sm font-bold text-slate-600 hover:border-brand-400 hover:text-brand-600">
                             <Plus size={16} /> Tambah Endpoint
                         </button>
                     )}
                 </div>
             </Section>
 
-            {/* FOOTER SIMPAN — nempel rata di bawah area konten (kanan sidebar), isinya sejajar sama kartu */}
-            <div className="fixed bottom-0 left-0 md:left-72 right-0 z-30 bg-white/95 backdrop-blur border-t border-slate-200 shadow-[0_-4px_16px_rgba(15,23,42,0.06)] px-4 md:px-10">
-                <div className="max-w-6xl mx-auto py-3 flex flex-wrap items-center gap-3">
-                <button type="button" onClick={back} className="px-4 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100">Kembali</button>
-                <div className="flex-1 text-xs font-medium">
-                    {error && <span className="text-red-600">⚠ {error}</span>}
-                    {!error && dirty && <span className="text-amber-600">Ada perubahan yang belum disimpan.</span>}
-                    {!error && !dirty && savedAt && <span className="text-emerald-600">✓ Tersimpan {savedAt.toLocaleTimeString('id-ID')}</span>}
-                </div>
-                <button type="button" onClick={save} disabled={saving} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-black hover:bg-slate-800 disabled:opacity-70">
-                    <Save size={16} /> {saving ? 'Menyimpan...' : 'Simpan'}
-                </button>
+            {/* Bar simpan melayang: di HP di atas tab bar, di desktop di bawah layar. */}
+            <div className="fixed z-30 inset-x-3 md:inset-x-6 bottom-[calc(6rem+env(safe-area-inset-bottom))] md:bottom-4">
+                <div className="glass mx-auto max-w-6xl rounded-2xl border border-slate-200/80 shadow-float px-3 py-2.5 flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={back} className="h-10 px-4 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-900/5">Kembali</button>
+                    <div className="flex-1 min-w-0 text-xs font-medium truncate">
+                        {error && <span className="text-red-600">⚠ {error}</span>}
+                        {!error && dirty && <span className="text-amber-600">Ada perubahan yang belum disimpan.</span>}
+                        {!error && !dirty && savedAt && <span className="text-emerald-600">✓ Tersimpan {savedAt.toLocaleTimeString('id-ID')}</span>}
+                    </div>
+                    <button type="button" onClick={save} disabled={saving} className="flex items-center gap-2 h-10 px-5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-70 shadow-soft">
+                        <Save size={16} /> {saving ? 'Menyimpan…' : 'Simpan'}
+                    </button>
                 </div>
             </div>
         </div>
@@ -587,11 +599,11 @@ export default function GatewayEditor({ gateway, onBack, onSaved }: Props) {
 
 function Section({ n, title, subtitle, children }: { n?: number; title: string; subtitle?: string; children: React.ReactNode }) {
     return (
-        <section className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-sm">
-            <div className="flex items-start gap-3 mb-4">
-                {n !== undefined && <div className="w-7 h-7 shrink-0 rounded-full bg-slate-900 text-white text-xs font-black flex items-center justify-center">{n}</div>}
+        <section className="bg-white border border-slate-200/80 rounded-2xl p-5 md:p-6 shadow-soft">
+            <div className="flex items-start gap-3 mb-5">
+                {n !== undefined && <div className="w-7 h-7 shrink-0 rounded-lg bg-slate-900 text-white text-xs font-semibold flex items-center justify-center">{n}</div>}
                 <div>
-                    <h2 className="text-base font-black text-slate-900">{title}</h2>
+                    <h2 className="text-[15px] font-semibold text-slate-900">{title}</h2>
                     {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
                 </div>
             </div>
@@ -612,7 +624,7 @@ function PlainCard({ title, description, summary, defaultOpen = true, onRemove, 
                     {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                 </button>
                 <div className="flex-1 min-w-0">
-                    <button type="button" onClick={() => setOpen(!open)} className="font-bold text-slate-800 text-sm text-left hover:text-blue-700">{title}</button>
+                    <button type="button" onClick={() => setOpen(!open)} className="font-bold text-slate-800 text-sm text-left hover:text-brand-700">{title}</button>
                     {open
                         ? description && <p className="text-[11px] text-slate-500 mt-0.5">{description}</p>
                         : <p className="text-[11px] font-mono text-slate-500 mt-0.5 truncate">{summary}</p>}

@@ -3,8 +3,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ArrowRight } from 'lucide-react';
 import { api, errorMessage } from '../../lib/api';
 import { getSessionUser, HOME_BY_ROLE, saveSession } from '../../lib/session';
+import AuthShell, { PasswordInput } from '../../components/AuthShell';
+import { Button, Field, inputClass, Notice } from '../../components/ui';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -35,28 +38,22 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-            <form onSubmit={handleLogin} className="animate-in bg-white p-8 rounded-xl shadow-lg w-full max-w-sm">
-                <div className="text-center mb-8">
-                    <h1 className="text-3xl font-extrabold text-blue-600">Dupay</h1>
-                    <p className="text-gray-500 text-sm mt-1">Login admin & merchant</p>
-                </div>
-                {error && <div className="bg-red-50 text-red-500 p-3 rounded mb-4 text-sm border border-red-200">{error}</div>}
-                <div className="mb-4">
-                    <label className="block text-sm font-semibold mb-2 text-gray-700">Username</label>
-                    <input type="text" autoComplete="username" className="w-full border p-3 rounded-lg outline-none" value={username} onChange={(e) => setUsername(e.target.value)} required />
-                </div>
-                <div className="mb-6">
-                    <label className="block text-sm font-semibold mb-2 text-gray-700">Password</label>
-                    <input type="password" autoComplete="current-password" className="w-full border p-3 rounded-lg outline-none" value={password} onChange={(e) => setPassword(e.target.value)} required />
-                </div>
-                <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white font-bold p-3 rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition">
-                    {loading ? 'Processing...' : 'Login'}
-                </button>
-                <p className="text-center text-sm text-gray-500 mt-6">
-                    Mau integrasi pembayaran? <Link href="/register" className="font-semibold text-blue-600 hover:underline">Daftar sebagai merchant</Link>
-                </p>
+        <AuthShell title="Masuk ke Dupay" subtitle="Satu login buat admin & merchant.">
+            <form onSubmit={handleLogin} className="space-y-4">
+                {error && <Notice tone="error">{error}</Notice>}
+                <Field label="Username">
+                    <input type="text" autoComplete="username" autoFocus className={`${inputClass} h-11`} value={username} onChange={(e) => setUsername(e.target.value)} required />
+                </Field>
+                <Field label="Password">
+                    <PasswordInput autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                </Field>
+                <Button type="submit" size="lg" loading={loading} className="w-full mt-2">
+                    {loading ? 'Memproses…' : <>Masuk <ArrowRight size={16} /></>}
+                </Button>
             </form>
-        </div>
+            <p className="text-sm text-slate-500 mt-8">
+                Mau integrasi pembayaran? <Link href="/register" className="font-medium text-brand-600 hover:text-brand-700">Daftar sebagai merchant</Link>
+            </p>
+        </AuthShell>
     );
 }

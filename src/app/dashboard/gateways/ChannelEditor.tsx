@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Plus, Trash2, Code2, Table2, DownloadCloud } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { toast } from '../../../components/overlays';
 
 export type Channel = {
     code: string;
@@ -23,7 +24,7 @@ type SyncState = 'new' | 'updated' | 'unchanged' | 'missing';
 
 const SYNC_BADGE: Record<SyncState, { label: string; className: string } | null> = {
     new: { label: 'BARU', className: 'bg-emerald-100 text-emerald-700' },
-    updated: { label: 'BERUBAH', className: 'bg-blue-100 text-blue-700' },
+    updated: { label: 'BERUBAH', className: 'bg-brand-100 text-brand-700' },
     missing: { label: 'HILANG DI PG', className: 'bg-amber-100 text-amber-700' },
     unchanged: null,
 };
@@ -138,7 +139,7 @@ export default function ChannelEditor({ value, onChange, getDraft, fetchDisabled
             const count = (state: SyncState) => items.filter(ch => ch.sync_state === state).length;
             setSyncSummary(`${count('new')} baru, ${count('updated')} berubah, ${count('missing')} hilang dari PG (dinonaktifkan). Cek kode & jenis channel-nya, lalu klik Simpan.`);
         } catch (err) {
-            alert(err instanceof Error ? err.message : String(err));
+            toast.error('Gagal tarik channel dari PG', err instanceof Error ? err.message : String(err));
         } finally {
             setFetching(false);
         }
@@ -191,7 +192,7 @@ export default function ChannelEditor({ value, onChange, getDraft, fetchDisabled
                             onClick={fetchFromPG}
                             disabled={!!fetchDisabledReason || fetching}
                             title={fetchDisabledReason || 'Ambil daftar channel dari endpoint Daftar Channel'}
-                            className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline disabled:text-slate-300 disabled:no-underline"
+                            className="flex items-center gap-1 text-[11px] font-bold text-brand-600 hover:underline disabled:text-slate-300 disabled:no-underline"
                         >
                             <DownloadCloud size={12} /> {fetching ? 'Menarik...' : 'Tarik dari PG'}
                         </button>
@@ -221,9 +222,9 @@ export default function ChannelEditor({ value, onChange, getDraft, fetchDisabled
             </p>
 
             {syncSummary && mode === 'visual' && (
-                <div className="flex items-start justify-between gap-3 text-[11px] font-medium text-blue-800 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-3">
+                <div className="flex items-start justify-between gap-3 text-[11px] font-medium text-brand-800 bg-brand-50 border border-brand-100 rounded-lg px-3 py-2 mb-3">
                     <span>{syncSummary}</span>
-                    <button type="button" onClick={() => setSyncSummary(null)} className="font-bold text-blue-600 hover:underline">Tutup</button>
+                    <button type="button" onClick={() => setSyncSummary(null)} className="font-bold text-brand-600 hover:underline">Tutup</button>
                 </div>
             )}
 
@@ -241,7 +242,7 @@ export default function ChannelEditor({ value, onChange, getDraft, fetchDisabled
                     {channels.length === 0 ? (
                         <div className="text-center py-8 border-2 border-dashed border-slate-200 rounded-xl">
                             <p className="text-xs text-slate-400 mb-3">Belum ada channel. Tambah manual, atau atur endpoint Daftar Channel lalu klik &quot;Tarik dari PG&quot;.</p>
-                            <button type="button" onClick={addRow} className="text-xs font-bold text-blue-600 hover:underline">
+                            <button type="button" onClick={addRow} className="text-xs font-bold text-brand-600 hover:underline">
                                 + Tambah Channel Manual
                             </button>
                         </div>
@@ -249,7 +250,7 @@ export default function ChannelEditor({ value, onChange, getDraft, fetchDisabled
                         <div className="table-wrap">
                             <table className="data-table table-fixed text-xs">
                                 <thead>
-                                    <tr className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                    <tr className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
                                         <th className="p-1.5 text-left w-14">On</th>
                                         <th className="p-1.5 text-left" title="Kode yang dikirim merchant di payment_method">Kode Merchant</th>
                                         <th className="p-1.5 text-left" title="Kode channel di PG, dikirim lewat {{payment_method}}">Kode di PG</th>
@@ -269,7 +270,7 @@ export default function ChannelEditor({ value, onChange, getDraft, fetchDisabled
                                                 <div className="flex items-center gap-1">
                                                     <input type="checkbox" checked={ch.active} onChange={e => updateRow(idx, { active: e.target.checked })} />
                                                     {ch.sync_state && SYNC_BADGE[ch.sync_state] && (
-                                                        <span className={`text-[9px] font-black px-1 py-0.5 rounded ${SYNC_BADGE[ch.sync_state]!.className}`}>
+                                                        <span className={`text-[9px] font-semibold px-1 py-0.5 rounded ${SYNC_BADGE[ch.sync_state]!.className}`}>
                                                             {SYNC_BADGE[ch.sync_state]!.label}
                                                         </span>
                                                     )}
@@ -277,7 +278,7 @@ export default function ChannelEditor({ value, onChange, getDraft, fetchDisabled
                                             </td>
                                             <td className="p-1" data-label="Kode merchant">
                                                 <input
-                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] outline-none focus:border-blue-400"
+                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] outline-none focus:border-brand-400"
                                                     placeholder="bca"
                                                     value={ch.code}
                                                     onChange={e => updateRow(idx, { code: e.target.value.toLowerCase() })}
@@ -285,7 +286,7 @@ export default function ChannelEditor({ value, onChange, getDraft, fetchDisabled
                                             </td>
                                             <td className="p-1" data-label="Kode di PG">
                                                 <input
-                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] font-mono outline-none focus:border-blue-400"
+                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] font-mono outline-none focus:border-brand-400"
                                                     placeholder="BCAVA"
                                                     value={ch.pg_code}
                                                     onChange={e => updateRow(idx, { pg_code: e.target.value })}
@@ -293,7 +294,7 @@ export default function ChannelEditor({ value, onChange, getDraft, fetchDisabled
                                             </td>
                                             <td className="p-1" data-label="Label">
                                                 <input
-                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] outline-none focus:border-blue-400"
+                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] outline-none focus:border-brand-400"
                                                     placeholder="BCA Virtual Account"
                                                     value={ch.label || ''}
                                                     onChange={e => updateRow(idx, { label: e.target.value })}
@@ -301,7 +302,7 @@ export default function ChannelEditor({ value, onChange, getDraft, fetchDisabled
                                             </td>
                                             <td className="p-1" data-label="Jenis">
                                                 <select
-                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] bg-white outline-none focus:border-blue-400"
+                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] bg-white outline-none focus:border-brand-400"
                                                     value={ch.method || ''}
                                                     onChange={e => updateRow(idx, { method: e.target.value as Channel['method'] })}
                                                 >
@@ -310,7 +311,7 @@ export default function ChannelEditor({ value, onChange, getDraft, fetchDisabled
                                             </td>
                                             <td className="p-1" data-label="Group">
                                                 <select
-                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] bg-white outline-none focus:border-blue-400"
+                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] bg-white outline-none focus:border-brand-400"
                                                     value={ch.group || ''}
                                                     onChange={e => updateRow(idx, { group: e.target.value as Channel['group'] })}
                                                 >
@@ -320,7 +321,7 @@ export default function ChannelEditor({ value, onChange, getDraft, fetchDisabled
                                             <td className="p-1" data-label="Min amount">
                                                 <input
                                                     type="number"
-                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] text-right outline-none focus:border-blue-400"
+                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] text-right outline-none focus:border-brand-400"
                                                     placeholder="10000"
                                                     value={ch.min_amount || ''}
                                                     onChange={e => updateRow(idx, { min_amount: Number(e.target.value) || 0 })}
@@ -329,7 +330,7 @@ export default function ChannelEditor({ value, onChange, getDraft, fetchDisabled
                                             <td className="p-1" data-label="Fee flat">
                                                 <input
                                                     type="number"
-                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] text-right outline-none focus:border-blue-400"
+                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] text-right outline-none focus:border-brand-400"
                                                     placeholder="4500"
                                                     value={ch.fee_flat || ''}
                                                     onChange={e => updateRow(idx, { fee_flat: Number(e.target.value) || 0 })}
@@ -339,7 +340,7 @@ export default function ChannelEditor({ value, onChange, getDraft, fetchDisabled
                                                 <input
                                                     type="number"
                                                     step="0.1"
-                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] text-right outline-none focus:border-blue-400"
+                                                    className="w-full min-w-0 border border-slate-200 p-1.5 rounded-md text-[11px] text-right outline-none focus:border-brand-400"
                                                     placeholder="0.7"
                                                     value={ch.fee_percent || ''}
                                                     onChange={e => updateRow(idx, { fee_percent: Number(e.target.value) || 0 })}
@@ -362,7 +363,7 @@ export default function ChannelEditor({ value, onChange, getDraft, fetchDisabled
                             <button
                                 type="button"
                                 onClick={addRow}
-                                className="mt-3 flex items-center gap-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-800"
+                                className="mt-3 flex items-center gap-1.5 text-[11px] font-bold text-brand-600 hover:text-brand-800"
                             >
                                 <Plus size={12} /> Tambah Channel
                             </button>

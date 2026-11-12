@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
-import { api } from '../../../lib/api';
+import { useEffect, useState } from 'react';
+import { api, errorMessage } from '../../../lib/api';
+import { consumeIntentFromURL, onIntent } from '../../../lib/nav';
 import GatewayEditor from './GatewayEditor';
 import { authConfig, autoEndpointName, endpointsFromGateway, GatewayRecord } from './gatewayTypes';
-import { Plus, Globe, Trash2, Pencil } from 'lucide-react';
-import { PageSkeleton } from '../../../components/ui';
+import { CreditCard, Globe, Pencil, Plus, Route, Trash2 } from 'lucide-react';
+import { Button, EmptyState, IconButton, PageHeader, PageSkeleton, Panel, Switch, Tag, TableCard, tdClass, thClass } from '../../../components/ui';
+import { confirmDialog, toast } from '../../../components/overlays';
 
 type ChannelRow = { code?: string; label?: string; active?: boolean; min_amount?: number; max_amount?: number };
 
@@ -35,8 +37,6 @@ export default function GatewaysPage() {
     const [disabledMethods, setDisabledMethods] = useState<string[]>([]);
     // undefined = lagi lihat daftar, null = tambah gateway baru, object = edit gateway itu
     const [editing, setEditing] = useState<GatewayRecord | null | undefined>(undefined);
-    const topRef = useRef<HTMLDivElement>(null);
-
     const loadGateways = async () => {
         try {
             const data = await api.fetchCMS('/gateways');
@@ -45,23 +45,39 @@ export default function GatewaysPage() {
             api.fetchCMS('/payment-methods/disabled')
                 .then(disabled => setDisabledMethods(Array.isArray(disabled) ? disabled : []))
                 .catch(err => console.warn('Gagal ambil metode bayar yang dimatiin:', err));
-        } catch (err) { console.error(err); } finally { setLoading(false); }
+        } catch (err) {
+            toast.error('Gagal memuat gateway', errorMessage(err));
+        } finally { setLoading(false); }
     };
 
     useEffect(() => { loadGateways(); }, []);
 
-    // Konten dashboard di-scroll di container sendiri (bukan window), jadi scroll pakai elemen.
+    // "Tambah gateway" dari command palette.
     useEffect(() => {
-        topRef.current?.scrollIntoView({ block: 'start' });
+        const openNew = () => setEditing(null);
+        if (consumeIntentFromURL('new-gateway')) queueMicrotask(openNew);
+        return onIntent('new-gateway', openNew);
+    }, []);
+
+    // Pindah daftar <-> editor: mulai dari atas halaman.
+    useEffect(() => {
+        window.scrollTo({ top: 0 });
     }, [editing]);
 
     const handleDelete = async (gw: GatewayRecord) => {
-        if (!confirm(`Hapus gateway ${gw.name}? Endpoint & channel-nya ikut terhapus.`)) return;
+        const ok = await confirmDialog({
+            title: `Hapus gateway ${gw.name}?`,
+            description: 'Endpoint & channel-nya ikut terhapus. Transaksi lama tetap tersimpan.',
+            confirmLabel: 'Hapus gateway',
+            tone: 'danger',
+        });
+        if (!ok) return;
         try {
             await api.fetchCMS(`/gateways/${gw.id}`, 'DELETE');
+            toast.success(`${gw.name} dihapus`);
             loadGateways();
         } catch (err) {
-            alert(err instanceof Error ? err.message : String(err));
+            toast.error('Gagal hapus gateway', errorMessage(err));
         }
     };
 
@@ -70,9 +86,10 @@ export default function GatewaysPage() {
         setDisabledMethods(active ? prev.filter(c => c !== code) : [...prev, code]);
         try {
             await api.fetchCMS(`/payment-methods/${encodeURIComponent(code)}`, 'PUT', { is_active: active });
+            toast.success(active ? `${code} ditampilkan ke merchant` : `${code} disembunyikan dari merchant`);
         } catch (err) {
             setDisabledMethods(prev);
-            alert(err instanceof Error ? err.message : String(err));
+            toast.error('Gagal mengubah metode bayar', errorMessage(err));
         }
     };
 
@@ -80,90 +97,87 @@ export default function GatewaysPage() {
 
     if (editing !== undefined) {
         return (
-            <div ref={topRef}>
-                <GatewayEditor
-                    key={editing?.id || 'new'}
-                    gateway={editing}
-                    onBack={() => { setEditing(undefined); loadGateways(); }}
-                    onSaved={loadGateways}
-                />
-            </div>
+            <GatewayEditor
+                key={editing?.id || 'new'}
+                gateway={editing}
+                onBack={() => { setEditing(undefined); loadGateways(); }}
+                onSaved={loadGateways}
+            />
         );
     }
 
     return (
-        <div ref={topRef} className="space-y-6 animate-in pb-20">
-            <div className="flex flex-wrap justify-between items-end gap-4">
-                <div>
-                    <h1 className="text-2xl font-black text-slate-900 tracking-tight">Payment Gateways</h1>
-                    <p className="text-sm text-slate-500 mt-1">Koneksi ke penyedia layanan pembayaran (PG). Klik gateway buat ngubah konfigurasinya.</p>
-                </div>
-                <button onClick={() => setEditing(null)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800">
-                    <Plus size={16} /> Tambah Gateway
-                </button>
-            </div>
+        <div className="space-y-6 animate-in">
+            <PageHeader
+                title="Payment Gateways"
+                subtitle="Koneksi ke penyedia layanan pembayaran (PG). Klik gateway buat ngubah konfigurasinya."
+                action={<Button icon={Plus} onClick={() => setEditing(null)}>Tambah gateway</Button>}
+            />
 
             {gateways.length === 0 ? (
-                <div className="bg-white rounded-3xl border-2 border-dashed border-slate-200 p-12 text-center">
-                    <p className="text-sm text-slate-500 mb-4">Belum ada payment gateway.</p>
-                    <button onClick={() => setEditing(null)} className="text-sm font-bold text-blue-600 hover:underline">+ Tambah gateway pertama</button>
-                </div>
+                <Panel>
+                    <EmptyState
+                        icon={CreditCard}
+                        title="Belum ada payment gateway"
+                        description="Hubungkan PG pertama (mis. Tripay atau iPaymu) biar merchant bisa mulai transaksi."
+                        action={<Button icon={Plus} onClick={() => setEditing(null)}>Tambah gateway</Button>}
+                    />
+                </Panel>
             ) : (
-                <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
-                    <div className="table-wrap">
-                        <table className="data-table text-left">
-                            <thead>
-                                <tr className="bg-slate-50 border-b border-slate-100">
-                                    <th className="p-5 text-xs font-bold text-slate-400 uppercase tracking-widest w-24">Prioritas</th>
-                                    <th className="p-5 text-xs font-bold text-slate-400 uppercase tracking-widest">Gateway</th>
-                                    <th className="p-5 text-xs font-bold text-slate-400 uppercase tracking-widest">Endpoint</th>
-                                    <th className="p-5 text-xs font-bold text-slate-400 uppercase tracking-widest">Autentikasi</th>
-                                    <th className="p-5 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50 stagger">
-                                {gateways.map(gw => (
-                                    <tr key={gw.id} onClick={() => setEditing(gw)} className="hover:bg-slate-50 cursor-pointer">
-                                        <td className="p-5 font-mono text-sm font-bold text-slate-700" data-label="Prioritas">{gw.priority ?? 0}</td>
-                                        <td className="p-5">
+                <TableCard>
+                    <table className="data-table text-left">
+                        <thead>
+                            <tr className="border-b border-slate-100 bg-slate-50/60">
+                                <th className={`${thClass} pl-5 w-24`}>Prioritas</th>
+                                <th className={thClass}>Gateway</th>
+                                <th className={thClass}>Endpoint</th>
+                                <th className={thClass}>Autentikasi</th>
+                                <th className={`${thClass} pr-5 text-right`}><span className="sr-only">Aksi</span></th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 stagger">
+                            {gateways.map(gw => {
+                                const endpoints = endpointsFromGateway(gw);
+                                return (
+                                    <tr key={gw.id} onClick={() => setEditing(gw)} className="hover:bg-slate-50/80 cursor-pointer">
+                                        <td className={`${tdClass} pl-5`} data-label="Prioritas">
+                                            <span className="tabular inline-flex items-center justify-center min-w-8 h-7 px-2 rounded-lg bg-slate-100 font-mono text-xs font-semibold text-slate-700">{gw.priority ?? 0}</span>
+                                        </td>
+                                        <td className={tdClass}>
                                             <div className="min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-bold text-slate-900">{gw.name}</span>
-                                                {gw.is_active === false && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">NONAKTIF</span>}
-                                            </div>
-                                            <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
-                                                <Globe size={12} className="text-blue-500" />
-                                                <span className="break-all">{gw.base_url}</span>
-                                            </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-medium text-slate-900">{gw.name}</span>
+                                                    {gw.is_active === false ? <Tag>Nonaktif</Tag> : <Tag tone="green">Aktif</Tag>}
+                                                </div>
+                                                <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
+                                                    <Globe size={12} className="text-slate-400 shrink-0" />
+                                                    <span className="break-all font-mono">{gw.base_url}</span>
+                                                </div>
                                             </div>
                                         </td>
-                                        <td className="p-5" data-label="Endpoint">
+                                        <td className={tdClass} data-label="Endpoint">
                                             <div className="flex flex-wrap gap-1">
-                                                {endpointsFromGateway(gw).map(ep => (
-                                                    <span key={ep.uid} className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${ep.is_active ? 'bg-slate-50 text-slate-600 border-slate-200' : 'bg-white text-slate-300 border-slate-100 line-through'}`}>
-                                                        {autoEndpointName(ep) || ep.name}
-                                                    </span>
+                                                {endpoints.map(ep => (
+                                                    <Tag key={ep.uid} className={ep.is_active ? '' : 'line-through opacity-50'}>{autoEndpointName(ep) || ep.name}</Tag>
                                                 ))}
-                                                {endpointsFromGateway(gw).length === 0 && <span className="text-xs text-amber-600">Belum ada endpoint</span>}
+                                                {endpoints.length === 0 && <Tag tone="amber">Belum ada endpoint</Tag>}
                                             </div>
                                         </td>
-                                        <td className="p-5" data-label="Auth">
-                                            <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-1 rounded-md border border-slate-200">
-                                                {authConfig(gw.auth_type).label}
-                                            </span>
+                                        <td className={tdClass} data-label="Auth">
+                                            <Tag tone="brand">{authConfig(gw.auth_type).label}</Tag>
                                         </td>
-                                        <td className="p-5 text-right" data-label="Aksi">
-                                            <div className="flex justify-end gap-1" onClick={e => e.stopPropagation()}>
-                                                <button onClick={() => setEditing(gw)} className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg" title="Edit"><Pencil size={18} /></button>
-                                                <button onClick={() => handleDelete(gw)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg" title="Hapus"><Trash2 size={18} /></button>
+                                        <td className={`${tdClass} pr-5 text-right`} data-label="Aksi">
+                                            <div className="flex justify-end gap-0.5" onClick={e => e.stopPropagation()}>
+                                                <IconButton icon={Pencil} label="Edit" tone="brand" onClick={() => setEditing(gw)} />
+                                                <IconButton icon={Trash2} label="Hapus" tone="red" onClick={() => handleDelete(gw)} />
                                             </div>
                                         </td>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </TableCard>
             )}
 
             {gateways.length > 0 && <RoutingOverview gateways={gateways} disabled={disabledMethods} onToggle={toggleMethod} />}
@@ -174,55 +188,47 @@ export default function GatewaysPage() {
 function RoutingOverview({ gateways, disabled, onToggle }: { gateways: GatewayRecord[]; disabled: string[]; onToggle: (code: string, active: boolean) => void }) {
     const routing = buildRouting(gateways);
     return (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 md:p-6">
-            <h2 className="text-base font-black text-slate-900">Metode bayar yang bisa dipakai merchant</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-                Merchant cuma kirim kode metode bayar (mis. <code>bri</code>). Dupay pakai gateway pertama yang aktif, punya channel itu, & nominalnya masuk batas min/max channel.
+        <Panel
+            title={<span className="flex items-center gap-2"><Route size={16} className="text-slate-400" /> Routing metode bayar</span>}
+            subtitle={<>
+                Merchant cuma kirim kode metode bayar (mis. <code className="font-mono">bri</code>). Dupay pakai gateway pertama yang aktif, punya channel itu, & nominalnya masuk batas min/max channel.
                 Gateway berikutnya cuma dipakai kalau yang sebelumnya nggak memenuhi syarat itu, bukan kalau PG-nya error.
-                Matiin toggle buat nyembunyiin metode bayar dari merchant di semua gateway (setting channel di gateway nggak berubah).
-            </p>
+                Matiin toggle buat nyembunyiin metode bayar dari merchant di semua gateway.
+            </>}
+        >
             {routing.length === 0 ? (
-                <p className="text-sm text-amber-600 mt-4">Belum ada channel aktif di gateway mana pun. Isi Daftar Channel di gateway dulu.</p>
+                <EmptyState icon={Route} title="Belum ada channel aktif" description="Isi Daftar Channel di salah satu gateway dulu." className="py-8" />
             ) : (
-                <div className="table-wrap mt-4">
+                <div className="table-wrap -mx-1">
                     <table className="data-table text-left text-sm">
                         <thead>
-                            <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                                <th className="py-2 pr-4 w-16">Aktif</th>
-                                <th className="py-2 pr-4">Kode</th>
-                                <th className="py-2 pr-4">Metode bayar</th>
-                                <th className="py-2 pr-4">Dipakai</th>
-                                <th className="py-2">Gateway lain</th>
+                            <tr className="border-b border-slate-100">
+                                <th className={`${thClass} w-16 pl-1`}>Aktif</th>
+                                <th className={thClass}>Kode</th>
+                                <th className={thClass}>Metode bayar</th>
+                                <th className={thClass}>Dipakai</th>
+                                <th className={thClass}>Cadangan</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-50">
+                        <tbody className="divide-y divide-slate-100">
                             {routing.map(([code, row]) => {
                                 const active = !disabled.includes(code);
                                 return (
-                                <tr key={code} className={`transition-opacity duration-200 ${active ? '' : 'opacity-50'}`}>
-                                    <td className="py-2 pr-4" data-label="Aktif">
-                                        <button
-                                            type="button"
-                                            role="switch"
-                                            aria-checked={active}
-                                            title={active ? 'Matiin metode bayar ini' : 'Nyalain metode bayar ini'}
-                                            onClick={() => onToggle(code, !active)}
-                                            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ${active ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                                        >
-                                            <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${active ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                                        </button>
-                                    </td>
-                                    <td className="py-2 pr-4 font-mono text-xs" data-label="Kode">{code}</td>
-                                    <td className="py-2 pr-4" data-label="Metode">{row.label}</td>
-                                    <td className="py-2 pr-4 font-bold text-slate-800" data-label="Dipakai">{row.gateways[0]}</td>
-                                    <td className="py-2 text-slate-500" data-label="Gateway lain">{row.gateways.slice(1).join(', ') || '-'}</td>
-                                </tr>
+                                    <tr key={code} className={`transition-opacity duration-200 ${active ? '' : 'opacity-50'}`}>
+                                        <td className="py-2.5 px-4 pl-1" data-label="Aktif">
+                                            <Switch checked={active} onChange={v => onToggle(code, v)} label={active ? 'Sembunyikan metode bayar ini' : 'Tampilkan metode bayar ini'} />
+                                        </td>
+                                        <td className="py-2.5 px-4 font-mono text-xs" data-label="Kode">{code}</td>
+                                        <td className="py-2.5 px-4 text-slate-700" data-label="Metode">{row.label}</td>
+                                        <td className="py-2.5 px-4 font-medium text-slate-900" data-label="Dipakai">{row.gateways[0]}</td>
+                                        <td className="py-2.5 px-4 text-slate-500" data-label="Cadangan">{row.gateways.slice(1).join(', ') || '-'}</td>
+                                    </tr>
                                 );
                             })}
                         </tbody>
                     </table>
                 </div>
             )}
-        </div>
+        </Panel>
     );
 }

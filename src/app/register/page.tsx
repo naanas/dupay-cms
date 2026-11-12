@@ -3,8 +3,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { CheckCircle2 } from 'lucide-react';
 import { api, errorMessage } from '../../lib/api';
 import { getSessionUser, HOME_BY_ROLE } from '../../lib/session';
+import AuthShell, { PasswordInput } from '../../components/AuthShell';
+import { Button, Field, inputClass, Notice } from '../../components/ui';
 
 const EMPTY = { business_name: '', email: '', pic_name: '', phone: '', username: '', password: '' };
 
@@ -42,76 +45,70 @@ export default function RegisterPage() {
         }
     };
 
-    const input = 'w-full border p-3 rounded-lg outline-none text-sm';
-    const label = 'block text-sm font-semibold mb-2 text-gray-700';
+    const input = `${inputClass} h-11`;
 
     if (done) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-                <div className="animate-in bg-white p-8 rounded-xl shadow-lg w-full max-w-md text-center">
-                    <h1 className="text-2xl font-extrabold text-blue-600 mb-3">Pendaftaran terkirim</h1>
-                    <p className="text-sm text-gray-600">
+            <AuthShell title="Pendaftaran terkirim">
+                <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50 p-5 flex gap-3">
+                    <CheckCircle2 size={20} className="text-emerald-600 shrink-0 mt-0.5" />
+                    <p className="text-sm text-emerald-900 leading-relaxed">
                         Akun <b>{form.username}</b> buat <b>{form.business_name}</b> udah dibuat dan lagi nunggu persetujuan admin Dupay.
                         Setelah diaktifkan, login pakai username & password tadi. API Key & Secret Key ada di menu <b>Integrasi API</b>.
                     </p>
-                    <Link href="/login" className="inline-block mt-6 w-full bg-blue-600 text-white font-bold p-3 rounded-lg hover:bg-blue-700">Ke halaman login</Link>
                 </div>
-            </div>
+                <Link href="/login" className="mt-6 inline-flex w-full items-center justify-center h-11 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">
+                    Ke halaman login
+                </Link>
+            </AuthShell>
         );
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-            <form onSubmit={handleSubmit} className="animate-in bg-white p-8 rounded-xl shadow-lg w-full max-w-lg">
-                <div className="text-center mb-8">
-                    <h1 className="text-3xl font-extrabold text-blue-600">Dupay</h1>
-                    <p className="text-gray-500 text-sm mt-1">Daftar sebagai merchant</p>
-                </div>
-                {error && <div className="bg-red-50 text-red-500 p-3 rounded mb-4 text-sm border border-red-200">{error}</div>}
+        <AuthShell title="Daftar sebagai merchant" subtitle="Akun baru aktif setelah disetujui admin Dupay." wide>
+            <form onSubmit={handleSubmit} className="space-y-6">
+                {error && <Notice tone="error">{error}</Notice>}
 
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Data bisnis</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                    <div className="sm:col-span-2">
-                        <label className={label}>Nama bisnis *</label>
-                        <input className={input} value={form.business_name} onChange={set('business_name')} required minLength={3} />
+                <fieldset className="space-y-4">
+                    <legend className="text-xs font-medium text-slate-400 mb-3">Data bisnis</legend>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <Field label="Nama bisnis" className="sm:col-span-2">
+                            <input className={input} value={form.business_name} onChange={set('business_name')} required minLength={3} />
+                        </Field>
+                        <Field label="Email">
+                            <input type="email" autoComplete="email" className={input} value={form.email} onChange={set('email')} required />
+                        </Field>
+                        <Field label={<>Nomor telepon <span className="text-slate-400 font-normal">(opsional)</span></>}>
+                            <input type="tel" autoComplete="tel" className={input} value={form.phone} onChange={set('phone')} />
+                        </Field>
+                        <Field label="Nama PIC" className="sm:col-span-2">
+                            <input autoComplete="name" className={input} value={form.pic_name} onChange={set('pic_name')} required />
+                        </Field>
                     </div>
-                    <div>
-                        <label className={label}>Email *</label>
-                        <input type="email" autoComplete="email" className={input} value={form.email} onChange={set('email')} required />
-                    </div>
-                    <div>
-                        <label className={label}>Nomor telepon</label>
-                        <input type="tel" autoComplete="tel" className={input} value={form.phone} onChange={set('phone')} />
-                    </div>
-                    <div className="sm:col-span-2">
-                        <label className={label}>Nama PIC *</label>
-                        <input autoComplete="name" className={input} value={form.pic_name} onChange={set('pic_name')} required />
-                    </div>
-                </div>
+                </fieldset>
 
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Akun login</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                    <div className="sm:col-span-2">
-                        <label className={label}>Username *</label>
-                        <input autoComplete="username" className={input} value={form.username} onChange={set('username')} required pattern="[a-zA-Z0-9_.\-]{3,50}" title="3-50 karakter: huruf, angka, titik, strip, underscore" />
+                <fieldset className="space-y-4">
+                    <legend className="text-xs font-medium text-slate-400 mb-3">Akun login</legend>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <Field label="Username" hint="3–50 karakter: huruf, angka, titik, strip, underscore." className="sm:col-span-2">
+                            <input autoComplete="username" className={input} value={form.username} onChange={set('username')} required pattern="[a-zA-Z0-9_.\-]{3,50}" title="3-50 karakter: huruf, angka, titik, strip, underscore" />
+                        </Field>
+                        <Field label="Password" hint="Minimal 8 karakter.">
+                            <PasswordInput autoComplete="new-password" value={form.password} onChange={set('password')} required minLength={8} />
+                        </Field>
+                        <Field label="Ulangi password">
+                            <PasswordInput autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} required minLength={8} />
+                        </Field>
                     </div>
-                    <div>
-                        <label className={label}>Password *</label>
-                        <input type="password" autoComplete="new-password" className={input} value={form.password} onChange={set('password')} required minLength={8} />
-                    </div>
-                    <div>
-                        <label className={label}>Ulangi password *</label>
-                        <input type="password" autoComplete="new-password" className={input} value={confirm} onChange={e => setConfirm(e.target.value)} required minLength={8} />
-                    </div>
-                </div>
+                </fieldset>
 
-                <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white font-bold p-3 rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition">
-                    {loading ? 'Mendaftar...' : 'Daftar'}
-                </button>
-                <p className="text-center text-sm text-gray-500 mt-6">
-                    Udah punya akun? <Link href="/login" className="font-semibold text-blue-600 hover:underline">Login</Link>
-                </p>
+                <Button type="submit" size="lg" loading={loading} className="w-full">
+                    {loading ? 'Mendaftar…' : 'Daftar'}
+                </Button>
             </form>
-        </div>
+            <p className="text-sm text-slate-500 mt-8">
+                Udah punya akun? <Link href="/login" className="font-medium text-brand-600 hover:text-brand-700">Masuk</Link>
+            </p>
+        </AuthShell>
     );
 }

@@ -1,5 +1,77 @@
 @import "tailwindcss";
 
+/* ---------- Design token ----------
+   Monokrom (slate) + satu warna brand. Warna lain cuma buat status (berhasil/gagal/menunggu). */
+
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+
+  --color-brand-50: oklch(0.97 0.02 268);
+  --color-brand-100: oklch(0.94 0.04 268);
+  --color-brand-200: oklch(0.88 0.08 268);
+  --color-brand-300: oklch(0.8 0.12 268);
+  --color-brand-400: oklch(0.7 0.17 268);
+  --color-brand-500: oklch(0.6 0.21 268);
+  --color-brand-600: oklch(0.53 0.22 268);
+  --color-brand-700: oklch(0.46 0.2 268);
+  --color-brand-800: oklch(0.39 0.16 268);
+  --color-brand-900: oklch(0.32 0.12 268);
+
+  --color-canvas: #f6f7f9;
+
+  --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 1px rgb(15 23 42 / 0.03);
+  --shadow-float: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px -6px rgb(15 23 42 / 0.12);
+  --shadow-pop: 0 2px 4px rgb(15 23 42 / 0.06), 0 24px 48px -12px rgb(15 23 42 / 0.28);
+}
+
+/* ---------- Dasar ---------- */
+
+html { scroll-padding-top: 6rem; }
+body {
+  background-color: var(--color-canvas);
+  background-image:
+    radial-gradient(60rem 30rem at 15% -10%, oklch(0.94 0.04 268 / 0.55), transparent 70%),
+    radial-gradient(50rem 30rem at 100% 0%, oklch(0.95 0.03 200 / 0.45), transparent 70%);
+  background-attachment: fixed;
+  color: var(--color-slate-900);
+  font-feature-settings: "cv11", "ss01";
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; }
+
+::selection { background: var(--color-brand-100); color: var(--color-brand-900); }
+
+/* Panel kaca buat elemen yang melayang (navbar, tab bar, palette). */
+.glass {
+  background: rgb(255 255 255 / 0.72);
+  backdrop-filter: saturate(180%) blur(16px);
+  -webkit-backdrop-filter: saturate(180%) blur(16px);
+}
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Angka rata kanan & lebar sama di tabel/statistik. */
+.tabular { font-variant-numeric: tabular-nums; }
+
+kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  padding: 0.2rem 0.35rem;
+  border-radius: 0.35rem;
+  border: 1px solid var(--color-slate-200);
+  border-bottom-width: 2px;
+  background: white;
+  color: var(--color-slate-500);
+}
+
 /* ---------- Animasi ---------- */
 
 @keyframes dp-enter {
@@ -16,6 +88,18 @@
 }
 @keyframes dp-shimmer {
   100% { transform: translateX(100%); }
+}
+@keyframes dp-sheet {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+@keyframes dp-drawer {
+  from { transform: translateX(100%); }
+  to { transform: none; }
+}
+@keyframes dp-toast {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
 }
 
 /* Konten masuk (dipakai tiap halaman setelah data kebaca). */
@@ -37,13 +121,21 @@
 
 .modal-backdrop { animation: dp-fade 0.2s ease-out both; }
 .modal-panel { animation: dp-pop 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+/* Di HP modal & drawer muncul dari bawah (bottom sheet), di desktop drawer dari kanan. */
+@media (max-width: 639px) {
+  .modal-panel, .drawer-panel { animation: dp-sheet 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+}
+@media (min-width: 640px) {
+  .drawer-panel { animation: dp-drawer 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+}
+.toast-enter { animation: dp-toast 0.25s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
 /* ---------- Skeleton ---------- */
 
 .skeleton {
   position: relative;
   overflow: hidden;
-  background: #e2e8f0;
+  background: var(--color-slate-200);
   border-radius: 0.5rem;
 }
 .skeleton::after {
@@ -71,7 +163,7 @@
   .data-table,
   .data-table tbody,
   .data-table tr { display: block; width: 100%; }
-  .data-table tbody tr { padding: 0.75rem 1rem; }
+  .data-table tbody tr { padding: 0.875rem 1rem; }
   .data-table td {
     display: flex;
     align-items: center;
@@ -90,7 +182,7 @@
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: #94a3b8;
+    color: var(--color-slate-400);
   }
   /* Sel tanpa label (mis. judul baris / pesan kosong) ambil lebar penuh. */
   .data-table td:not([data-label]) { justify-content: flex-start; text-align: left; }

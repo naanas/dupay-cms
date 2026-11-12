@@ -215,7 +215,7 @@ export default function EndpointCard({
         }
     };
 
-    const inputCls = 'w-full border border-slate-200 p-2 rounded-lg text-xs outline-none focus:border-blue-400 bg-white';
+    const inputCls = 'w-full border border-slate-200 p-2 rounded-lg text-xs outline-none focus:border-brand-400 bg-white';
 
     return (
         <div className={`border rounded-2xl p-4 bg-white ${ep.is_active ? 'border-slate-200' : 'border-slate-200 opacity-60'}`}>
@@ -228,7 +228,7 @@ export default function EndpointCard({
                     {editableName && open ? (
                         <input className={`${inputCls} font-bold text-sm`} placeholder="Nama endpoint, mis. Refund" value={ep.name} onChange={e => onChange({ name: e.target.value })} />
                     ) : (
-                        <button type="button" onClick={() => setOpen(!open)} className="font-bold text-slate-800 text-sm text-left hover:text-blue-700">
+                        <button type="button" onClick={() => setOpen(!open)} className="font-bold text-slate-800 text-sm text-left hover:text-brand-700">
                             {title || 'Endpoint tanpa nama'}
                         </button>
                     )}
@@ -296,7 +296,7 @@ export default function EndpointCard({
                             {templateError && <p className="text-[11px] font-medium text-red-600 mt-1">Bukan JSON yang valid: {templateError}</p>}
                             <div className="flex flex-wrap gap-1 mt-1">
                                 {PLACEHOLDERS.map(ph => (
-                                    <button key={ph} type="button" onClick={() => insertPlaceholder(ph)} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100">
+                                    <button key={ph} type="button" onClick={() => insertPlaceholder(ph)} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 border border-brand-100 hover:bg-brand-100">
                                         + {ph}
                                     </button>
                                 ))}
@@ -355,7 +355,7 @@ export default function EndpointCard({
                             />
                             {sampleError && <p className="text-[10px] text-red-600">{sampleError}</p>}
                             {fields && (
-                                <button type="button" disabled={sampleObj === null} onClick={autoFill} className="mt-1 flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline disabled:text-slate-300 disabled:no-underline">
+                                <button type="button" disabled={sampleObj === null} onClick={autoFill} className="mt-1 flex items-center gap-1 text-[11px] font-bold text-brand-600 hover:underline disabled:text-slate-300 disabled:no-underline">
                                     <Wand2 size={12} /> Isi otomatis dari contoh (cuma isi yang masih kosong)
                                 </button>
                             )}
@@ -370,8 +370,8 @@ export default function EndpointCard({
                                     </p>
                                     <div className="mt-1 max-h-48 overflow-auto border border-slate-200 rounded-md bg-slate-50 divide-y divide-slate-100">
                                         {allPaths(sampleObj).map(({ path, value }) => (
-                                            <button key={path} type="button" onClick={() => pickPath(path)} className="w-full flex items-center gap-2 px-2 py-1 text-left hover:bg-blue-50">
-                                                <code className="text-[10px] text-blue-700 shrink-0">{path}</code>
+                                            <button key={path} type="button" onClick={() => pickPath(path)} className="w-full flex items-center gap-2 px-2 py-1 text-left hover:bg-brand-50">
+                                                <code className="text-[10px] text-brand-700 shrink-0">{path}</code>
                                                 <span className="text-[10px] text-slate-500 truncate">{preview(value) ?? 'null'}</span>
                                             </button>
                                         ))}
@@ -483,7 +483,7 @@ function FieldRow({ label, hint, required, value, onChange, preview: pv, placeho
             </div>
             <div>
                 <input
-                    className={`w-full border p-1.5 rounded-md text-[11px] font-mono outline-none focus:border-blue-400 bg-white ${active ? 'border-blue-400' : 'border-slate-200'}`}
+                    className={`w-full border p-1.5 rounded-md text-[11px] font-mono outline-none focus:border-brand-400 bg-white ${active ? 'border-brand-400' : 'border-slate-200'}`}
                     placeholder={placeholder ? `mis. ${placeholder}` : ''}
                     value={value}
                     onFocus={onFocus}
@@ -507,15 +507,15 @@ function CustomMapping({ mapping, onChange, sampleObj }: { mapping: Record<strin
             {rows.length === 0 && <p className="text-[11px] text-slate-400">Opsional. Cuma dipakai buat nampilin data waktu Test.</p>}
             {rows.map(([key, path], idx) => (
                 <div key={idx} className="flex items-start gap-1.5">
-                    <input className="w-2/5 border border-slate-200 p-1.5 rounded-md text-[11px] outline-none focus:border-blue-400" placeholder="nama" value={key} onChange={e => update(idx, e.target.value, path)} />
+                    <input className="w-2/5 border border-slate-200 p-1.5 rounded-md text-[11px] outline-none focus:border-brand-400" placeholder="nama" value={key} onChange={e => update(idx, e.target.value, path)} />
                     <div className="flex-1">
-                        <input className="w-full border border-slate-200 p-1.5 rounded-md text-[11px] font-mono outline-none focus:border-blue-400" placeholder="lokasi, mis. data.id" value={path} onChange={e => update(idx, key, e.target.value)} />
+                        <input className="w-full border border-slate-200 p-1.5 rounded-md text-[11px] font-mono outline-none focus:border-brand-400" placeholder="lokasi, mis. data.id" value={path} onChange={e => update(idx, key, e.target.value)} />
                         {sampleObj !== null && path && <div className="text-[10px] font-mono text-emerald-700 truncate mt-0.5">→ {preview(getPath(sampleObj, path)) ?? '— nggak ketemu'}</div>}
                     </div>
                     <button type="button" onClick={() => onChange(Object.fromEntries(rows.filter((_, i) => i !== idx)))} className="p-1.5 text-slate-400 hover:text-red-500"><X size={13} /></button>
                 </div>
             ))}
-            <button type="button" onClick={() => onChange({ ...mapping, [`field_${rows.length + 1}`]: '' })} className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline">
+            <button type="button" onClick={() => onChange({ ...mapping, [`field_${rows.length + 1}`]: '' })} className="flex items-center gap-1 text-[11px] font-bold text-brand-600 hover:underline">
                 <Plus size={12} /> Tambah data
             </button>
         </div>

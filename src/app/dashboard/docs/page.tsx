@@ -50,10 +50,10 @@ export default function DocsPage() {
 
             {/* HERO */}
             <div className="space-y-4 border-b border-slate-200 pb-8">
-                <div className="flex items-center gap-2 text-blue-600 text-xs font-bold uppercase tracking-widest">
+                <div className="flex items-center gap-2 text-brand-600 text-xs font-bold uppercase tracking-widest">
                     <BookOpen size={14} /> Dokumentasi API Merchant
                 </div>
-                <h1 className="text-4xl font-black text-slate-900 tracking-tight">Integrasi Dupay</h1>
+                <h1 className="text-4xl font-semibold text-slate-900 tracking-tight">Integrasi Dupay</h1>
                 <p className="text-lg text-slate-500 leading-relaxed">
                     Satu API buat semua metode bayar. Merchant cukup kirim <strong>kode metode bayar</strong> (mis. <code>{sample}</code>),
                     Dupay yang milih payment gateway, bikin tagihan, & ngabarin hasilnya lewat webhook.
@@ -105,7 +105,7 @@ export default function DocsPage() {
                     ? <>Ambil dari menu <strong>Merchants</strong> di CMS, lalu kasih ke merchant (atau bikinin akun login biar merchant lihat sendiri):</>
                     : <>Ada di menu <strong>Integrasi API</strong>:</>}</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Card icon={<Key size={16} />} color="text-blue-600" title="API Key (pk_...)">
+                    <Card icon={<Key size={16} />} color="text-brand-600" title="API Key (pk_...)">
                         Identitas merchant. Dikirim di header <Code>X-API-KEY</Code>.
                     </Card>
                     <Card icon={<ShieldCheck size={16} />} color="text-red-500" title="Secret Key (sk_...)">
@@ -133,9 +133,9 @@ export default function DocsPage() {
                     ]}
                     mono
                 />
-                <div className="p-5 bg-blue-50/60 border border-blue-100 rounded-2xl space-y-2">
-                    <p className="font-mono text-sm text-blue-900">signature = hex( HMAC_SHA256( key = secret_key, data = raw_body + timestamp ) )</p>
-                    <ul className="text-xs text-blue-800 list-disc pl-5 space-y-1">
+                <div className="p-5 bg-brand-50/60 border border-brand-100 rounded-2xl space-y-2">
+                    <p className="font-mono text-sm text-brand-900">signature = hex( HMAC_SHA256( key = secret_key, data = raw_body + timestamp ) )</p>
+                    <ul className="text-xs text-brand-800 list-disc pl-5 space-y-1">
                         <li><strong>raw_body</strong> = string JSON yang <em>persis</em> dikirim. Jangan di-stringify ulang setelah ditandatangani (spasi/urutan beda = signature salah).</li>
                         <li>Request tanpa body (<Code>GET</Code>, <Code>POST .../sync</Code>): raw_body = string kosong, jadi yang ditandatangani cuma timestamp.</li>
                     </ul>
@@ -333,9 +333,9 @@ X-Dupay-Signature: 5d41402abc4b2a76b9719d911017c592...
   "payment_method": "${sample}",
   "timestamp": 1730000000
 }`} />
-                <div className="p-5 bg-blue-50/60 border border-blue-100 rounded-2xl">
-                    <p className="font-mono text-sm text-blue-900">X-Dupay-Signature = hex( HMAC_SHA256( key = secret_key, data = raw_body ) )</p>
-                    <p className="text-xs text-blue-800 mt-2">Beda sama request ke Dupay: di sini <strong>tanpa timestamp</strong>, cuma raw body. Hitung dari body mentah sebelum di-parse.</p>
+                <div className="p-5 bg-brand-50/60 border border-brand-100 rounded-2xl">
+                    <p className="font-mono text-sm text-brand-900">X-Dupay-Signature = hex( HMAC_SHA256( key = secret_key, data = raw_body ) )</p>
+                    <p className="text-xs text-brand-800 mt-2">Beda sama request ke Dupay: di sini <strong>tanpa timestamp</strong>, cuma raw body. Hitung dari body mentah sebelum di-parse.</p>
                 </div>
                 <CodeTabs tabs={{
                     "Node.js (Express)": `const crypto = require("crypto");
@@ -398,7 +398,7 @@ echo json_encode(["success" => true]);`,
                 />
             </Section>
 
-            <div className="bg-amber-50 p-6 rounded-3xl border border-amber-200 flex gap-4 items-start shadow-sm">
+            <div className="bg-amber-50 p-6 rounded-2xl border border-amber-200 flex gap-4 items-start shadow-sm">
                 <AlertTriangle className="text-amber-500 flex-shrink-0 mt-1" size={24} />
                 <div>
                     <h4 className="font-bold text-amber-900">Peringatan keamanan</h4>
@@ -418,7 +418,7 @@ function Section({ id, icon, title, children }: { id: string; icon: React.ReactN
     return (
         <section id={id} className="scroll-mt-6 space-y-4 text-slate-600 text-sm leading-relaxed">
             <h2 className="flex items-center gap-2.5 text-2xl font-bold text-slate-800">
-                <span className="text-blue-500">{icon}</span> {title}
+                <span className="text-brand-500">{icon}</span> {title}
             </h2>
             {children}
         </section>
@@ -459,7 +459,7 @@ function Table({ head, rows, mono, monoFirst }: { head: string[]; rows: string[]
                     {rows.map((r, i) => (
                         <tr key={i}>
                             {r.map((cell, j) => (
-                                <td key={j} data-label={j === 0 ? undefined : head[j]} className={`p-3 align-top ${j === 0 && (mono || monoFirst) ? "font-mono text-xs font-bold text-blue-600" : "text-slate-600"}`}>{cell}</td>
+                                <td key={j} data-label={j === 0 ? undefined : head[j]} className={`p-3 align-top ${j === 0 && (mono || monoFirst) ? "font-mono text-xs font-bold text-brand-600" : "text-slate-600"}`}>{cell}</td>
                             ))}
                         </tr>
                     ))}
@@ -499,7 +499,7 @@ function CodeBlock({ code, label }: { code: string; label?: string }) {
                     {copied ? <><Check size={12} /> Disalin</> : <><Copy size={12} /> Salin</>}
                 </button>
             </div>
-            <pre className="p-4 text-blue-200 font-mono text-xs leading-relaxed overflow-x-auto">{code}</pre>
+            <pre className="p-4 text-brand-200 font-mono text-xs leading-relaxed overflow-x-auto">{code}</pre>
         </div>
     );
 }
@@ -524,7 +524,7 @@ function CodeTabs({ tabs }: { tabs: Record<string, string> }) {
 
 const METHOD_STYLE: Record<string, string> = {
     GET: "bg-emerald-100 text-emerald-700",
-    POST: "bg-blue-100 text-blue-700",
+    POST: "bg-brand-100 text-brand-700",
 };
 
 function Endpoint({ method, path, desc, auth = true, fields, request, response, note }: {
@@ -532,9 +532,9 @@ function Endpoint({ method, path, desc, auth = true, fields, request, response, 
     fields?: string[][]; request?: string; response: string; note?: string;
 }) {
     return (
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-sm space-y-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-sm space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-                <span className={`text-[11px] font-black px-2 py-1 rounded-md ${METHOD_STYLE[method]}`}>{method}</span>
+                <span className={`text-[11px] font-semibold px-2 py-1 rounded-md ${METHOD_STYLE[method]}`}>{method}</span>
                 <code className="font-mono font-bold text-slate-900 break-all">{path}</code>
                 <span className={`ml-auto text-[10px] font-bold px-2 py-1 rounded-full border ${auth ? "bg-red-50 text-red-600 border-red-100" : "bg-slate-50 text-slate-500 border-slate-200"}`}>
                     {auth ? "Wajib signature" : "Publik"}

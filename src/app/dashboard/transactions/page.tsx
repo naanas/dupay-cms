@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { api } from "../../../lib/api";
-import { PageSkeleton } from "../../../components/ui";
-import { Eye, RefreshCw } from "lucide-react";
+import { api, errorMessage } from "../../../lib/api";
+import {
+    Button, CopyField, DetailList, Drawer, EmptyState, formatDateTime, formatRupiah, IconButton, inputClass, PageHeader,
+    PageSkeleton, SearchInput, Segmented, StatCard, StatusBadge, STATUS_LABEL, Tag, TableCard, tdClass, thClass,
+} from "../../../components/ui";
+import { toast } from "../../../components/overlays";
+import { Activity, CheckCircle2, Clock, Eye, FilterX, RefreshCw, XCircle } from "lucide-react";
 
 type TransactionItem = {
     id: string;
@@ -23,6 +27,13 @@ type TransactionItem = {
     created_at: string;
 };
 
+type StatusFilter = "ALL" | "SUCCESS" | "PENDING" | "FAILED" | "REFUNDED";
+
+const prettyJSON = (raw: string) => {
+    if (!raw) return "-";
+    try { return JSON.stringify(JSON.parse(raw), null, 2); } catch { return raw; }
+};
+
 export default function TransactionsPage() {
     const [transactions, setTransactions] = useState<TransactionItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -30,7 +41,7 @@ export default function TransactionsPage() {
     const [selected, setSelected] = useState<TransactionItem | null>(null);
     const [syncingId, setSyncingId] = useState<string | null>(null);
     const [search, setSearch] = useState("");
-    const [statusFilter, setStatusFilter] = useState("ALL");
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
     const [merchantFilter, setMerchantFilter] = useState("ALL");
     const [gatewayFilter, setGatewayFilter] = useState("ALL");
 
@@ -40,7 +51,7 @@ export default function TransactionsPage() {
             const data = await api.fetchCMS("/transactions");
             setTransactions(Array.isArray(data) ? data : []);
         } catch (err) {
-            console.error("Gagal mengambil transaksi:", err);
+            toast.error("Gagal mengambil transaksi", errorMessage(err));
         } finally {
             setLoading(false);
             if (isRefresh) setRefreshing(false);
@@ -56,23 +67,31 @@ export default function TransactionsPage() {
         setSyncingId(trx.id);
         try {
             const res = await api.fetchCMS(`/transactions/${trx.id}/sync`, "POST");
-            const newStatus = res?.data?.status;
-            alert(`Status di ${trx.gateway_name || "PG"}: ${res?.pg_status}\nStatus Dupay: ${trx.status} → ${newStatus}`);
+            const newStatus: string = res?.data?.status || trx.status;
+            const changed = newStatus !== trx.status;
+            (changed ? toast.success : toast.info)(
+                changed ? `${trx.order_id}: ${STATUS_LABEL[trx.status] || trx.status} → ${STATUS_LABEL[newStatus] || newStatus}` : `${trx.order_id}: status nggak berubah`,
+                `Status di ${trx.gateway_name || "PG"}: ${res?.pg_status ?? "-"}`,
+            );
+            if (selected?.id === trx.id) setSelected({ ...trx, status: newStatus });
             await loadTransactions(true);
-        } catch (err: any) {
-            alert(err.message);
+        } catch (err) {
+            toast.error(`Cek status ${trx.order_id} gagal`, errorMessage(err));
         } finally {
             setSyncingId(null);
         }
     };
 
-    const stats = useMemo(() => {
-        const total = transactions.length;
-        const success = transactions.filter((trx) => trx.status === "SUCCESS").length;
-        const pending = transactions.filter((trx) => trx.status === "PENDING").length;
-        const failed = transactions.filter((trx) => trx.status === "FAILED").length;
-        return { total, success, pending, failed };
+    const counts = useMemo(() => {
+        const c: Record<string, number> = { ALL: transactions.length, SUCCESS: 0, PENDING: 0, FAILED: 0, REFUNDED: 0 };
+        for (const t of transactions) c[t.status] = (c[t.status] || 0) + 1;
+        return c;
     }, [transactions]);
+
+    const successAmount = useMemo(
+        () => transactions.filter(t => t.status === "SUCCESS").reduce((sum, t) => sum + (t.amount || 0), 0),
+        [transactions],
+    );
 
     const merchantOptions = useMemo(() => {
         return Array.from(new Set(transactions.map((trx) => trx.merchant_name || trx.merchant_id))).filter(Boolean);
@@ -103,206 +122,182 @@ export default function TransactionsPage() {
         });
     }, [transactions, search, statusFilter, merchantFilter, gatewayFilter]);
 
-    const formatAmount = (amount: number) =>
-        new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR" }).format(amount || 0);
-
-    const statusClass = (status: string) => {
-        if (status === "SUCCESS") return "bg-emerald-50 text-emerald-700 border-emerald-100";
-        if (status === "FAILED") return "bg-red-50 text-red-700 border-red-100";
-        if (status === "REFUNDED") return "bg-amber-50 text-amber-700 border-amber-100";
-        return "bg-blue-50 text-blue-700 border-blue-100";
+    const filtered = search !== "" || statusFilter !== "ALL" || merchantFilter !== "ALL" || gatewayFilter !== "ALL";
+    const resetFilters = () => {
+        setSearch("");
+        setStatusFilter("ALL");
+        setMerchantFilter("ALL");
+        setGatewayFilter("ALL");
     };
 
     if (loading) {
-        return <PageSkeleton stats={4} panels={1} table />;
+        return <PageSkeleton stats={4} table />;
     }
 
     return (
-        <div className="space-y-8 animate-in">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-black text-slate-900 tracking-tight">Transaction Monitor</h1>
-                    <p className="text-sm text-slate-500 mt-1">Pantau request client dan response payment gateway secara realtime.</p>
-                </div>
-                <button
-                    onClick={() => loadTransactions(true)}
-                    disabled={refreshing}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 disabled:opacity-70"
-                >
-                    <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
-                    {refreshing ? "Memperbarui..." : "Refresh Data"}
-                </button>
+        <div className="space-y-6 animate-in">
+            <PageHeader
+                title="Transaksi"
+                subtitle="Pantau request merchant & response payment gateway. Klik baris buat lihat detail."
+                action={
+                    <Button variant="secondary" icon={RefreshCw} loading={refreshing} onClick={() => loadTransactions(true)}>
+                        {refreshing ? "Memperbarui…" : "Muat ulang"}
+                    </Button>
+                }
+            />
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 stagger">
+                <StatCard label="Berhasil dibayar" value={formatRupiah(successAmount)} icon={Activity} highlight hint={`${counts.ALL} transaksi total`} />
+                <StatCard label="Berhasil" value={counts.SUCCESS} icon={CheckCircle2} tone="green" />
+                <StatCard label="Menunggu bayar" value={counts.PENDING} icon={Clock} tone="sky" />
+                <StatCard label="Gagal" value={counts.FAILED} icon={XCircle} tone="red" />
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white border border-slate-200 rounded-2xl p-4"><p className="text-xs text-slate-500">Total</p><p className="text-2xl font-black">{stats.total}</p></div>
-                <div className="bg-white border border-slate-200 rounded-2xl p-4"><p className="text-xs text-slate-500">SUCCESS</p><p className="text-2xl font-black text-emerald-600">{stats.success}</p></div>
-                <div className="bg-white border border-slate-200 rounded-2xl p-4"><p className="text-xs text-slate-500">PENDING</p><p className="text-2xl font-black text-blue-600">{stats.pending}</p></div>
-                <div className="bg-white border border-slate-200 rounded-2xl p-4"><p className="text-xs text-slate-500">FAILED</p><p className="text-2xl font-black text-red-600">{stats.failed}</p></div>
-            </div>
-
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <input
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Cari order, merchant, gateway, status..."
-                        className="md:col-span-2 w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value="ALL">Semua Status</option>
-                        <option value="SUCCESS">SUCCESS</option>
-                        <option value="PENDING">PENDING</option>
-                        <option value="FAILED">FAILED</option>
-                        <option value="REFUNDED">REFUNDED</option>
-                    </select>
-                    <button
-                        onClick={() => {
-                            setSearch("");
-                            setStatusFilter("ALL");
-                            setMerchantFilter("ALL");
-                            setGatewayFilter("ALL");
-                        }}
-                        className="w-full rounded-xl px-3 py-2.5 text-sm font-bold border border-slate-300 text-slate-700 hover:bg-slate-50"
-                    >
-                        Reset Filter
-                    </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                    <select
-                        value={merchantFilter}
-                        onChange={(e) => setMerchantFilter(e.target.value)}
-                        className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value="ALL">Semua Merchant</option>
-                        {merchantOptions.map((merchant) => (
-                            <option key={merchant} value={merchant}>{merchant}</option>
-                        ))}
-                    </select>
-                    <select
-                        value={gatewayFilter}
-                        onChange={(e) => setGatewayFilter(e.target.value)}
-                        className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value="ALL">Semua Gateway</option>
-                        {gatewayOptions.map((gateway) => (
-                            <option key={gateway} value={gateway}>{gateway}</option>
-                        ))}
-                    </select>
-                </div>
-                <p className="text-xs text-slate-500 mt-3">
-                    Menampilkan {filteredTransactions.length} dari {transactions.length} transaksi
-                </p>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                <div className="table-wrap">
-                    <table className="data-table text-left">
-                        <thead>
-                            <tr className="bg-slate-50 border-b border-slate-200">
-                                <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase">Order</th>
-                                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">Merchant / Gateway</th>
-                                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">Amount</th>
-                                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">Status</th>
-                                <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase text-right w-28">Aksi</th>
+            <TableCard
+                toolbar={
+                    <>
+                        <SearchInput value={search} onChange={setSearch} placeholder="Cari order, merchant, gateway, referensi…" className="flex-1 min-w-0 lg:max-w-sm" />
+                        <Segmented<StatusFilter>
+                            value={statusFilter}
+                            onChange={setStatusFilter}
+                            options={[
+                                { value: "ALL", label: "Semua", count: counts.ALL },
+                                { value: "SUCCESS", label: "Berhasil", count: counts.SUCCESS },
+                                { value: "PENDING", label: "Menunggu", count: counts.PENDING },
+                                { value: "FAILED", label: "Gagal", count: counts.FAILED },
+                                { value: "REFUNDED", label: "Refund", count: counts.REFUNDED },
+                            ]}
+                        />
+                        <div className="flex gap-2 lg:ml-auto">
+                            <select value={merchantFilter} onChange={(e) => setMerchantFilter(e.target.value)} className={`${inputClass} lg:w-40`} aria-label="Filter merchant">
+                                <option value="ALL">Semua merchant</option>
+                                {merchantOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                            <select value={gatewayFilter} onChange={(e) => setGatewayFilter(e.target.value)} className={`${inputClass} lg:w-40`} aria-label="Filter gateway">
+                                <option value="ALL">Semua gateway</option>
+                                {gatewayOptions.map((g) => <option key={g} value={g}>{g}</option>)}
+                            </select>
+                        </div>
+                    </>
+                }
+                footer={
+                    <div className="flex items-center justify-between gap-3">
+                        <span>Menampilkan <b className="text-slate-700">{filteredTransactions.length}</b> dari {transactions.length} transaksi</span>
+                        {filtered && <button onClick={resetFilters} className="inline-flex items-center gap-1 font-medium text-slate-600 hover:text-slate-900"><FilterX size={13} /> Reset filter</button>}
+                    </div>
+                }
+            >
+                <table className="data-table text-left">
+                    <thead>
+                        <tr className="border-b border-slate-100 bg-slate-50/60">
+                            <th className={`${thClass} pl-5`}>Order</th>
+                            <th className={thClass}>Merchant / Gateway</th>
+                            <th className={`${thClass} text-right`}>Nominal</th>
+                            <th className={thClass}>Status</th>
+                            <th className={`${thClass} pr-5 text-right w-24`}><span className="sr-only">Aksi</span></th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 stagger">
+                        {filteredTransactions.map((trx) => (
+                            <tr key={trx.id} onClick={() => setSelected(trx)} className="group hover:bg-slate-50/80 cursor-pointer">
+                                <td className={`${tdClass} pl-5`}>
+                                    <div className="min-w-0">
+                                        <p className="font-mono text-xs font-medium text-slate-900 break-all">{trx.order_id}</p>
+                                        <p className="text-[11px] text-slate-400 mt-0.5">
+                                            <span className="font-mono uppercase">{trx.payment_method}</span> · {formatDateTime(trx.created_at)}
+                                        </p>
+                                    </div>
+                                </td>
+                                <td className={tdClass} data-label="Merchant">
+                                    <div>
+                                        <p className="text-sm text-slate-700">{trx.merchant_name || trx.merchant_id}</p>
+                                        <p className="text-[11px] text-slate-400">via {trx.gateway_name || trx.gateway_id || "-"}</p>
+                                    </div>
+                                </td>
+                                <td className={`${tdClass} tabular text-sm font-semibold text-slate-900 text-right`} data-label="Nominal">{formatRupiah(trx.amount)}</td>
+                                <td className={tdClass} data-label="Status">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                        <StatusBadge status={trx.status} />
+                                        {trx.pg_status_code ? <Tag className="font-mono" >PG {trx.pg_status_code}</Tag> : null}
+                                    </div>
+                                </td>
+                                <td className={`${tdClass} pr-5`} data-label="Aksi">
+                                    <div className="flex justify-end gap-0.5" onClick={e => e.stopPropagation()}>
+                                        <IconButton icon={RefreshCw} label="Cek status ke PG" tone="brand" spinning={syncingId === trx.id} disabled={syncingId !== null} onClick={() => syncStatus(trx)} />
+                                        <IconButton icon={Eye} label="Lihat detail" onClick={() => setSelected(trx)} />
+                                    </div>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 stagger">
-                            {filteredTransactions.map((trx) => (
-                                <tr key={trx.id} className="hover:bg-slate-50">
-                                    <td className="px-5 py-3">
-                                        <div>
-                                            <p className="text-sm font-bold text-slate-800 break-all">{trx.order_id}</p>
-                                            <p className="text-[11px] text-slate-500">
-                                                <span className="font-mono">{trx.payment_method}</span> · {new Date(trx.created_at).toLocaleString("id-ID")}
-                                            </p>
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3" data-label="Merchant">
-                                        <div>
-                                            <p className="text-sm text-slate-700">{trx.merchant_name || trx.merchant_id}</p>
-                                            <p className="text-[11px] text-slate-500">via {trx.gateway_name || trx.gateway_id || "-"}</p>
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3 text-sm font-semibold text-slate-800" data-label="Amount">{formatAmount(trx.amount)}</td>
-                                    <td className="px-4 py-3" data-label="Status">
-                                        <div className="flex flex-wrap items-center gap-1.5">
-                                            <span className={`inline-flex px-2.5 py-1 rounded-md border text-[11px] font-bold ${statusClass(trx.status)}`}>
-                                                {trx.status}
-                                            </span>
-                                            {trx.pg_status_code ? (
-                                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600" title="HTTP status dari PG">
-                                                    PG {trx.pg_status_code}
-                                                </span>
-                                            ) : null}
-                                        </div>
-                                    </td>
-                                    <td className="px-5 py-3" data-label="Aksi">
-                                        <div className="flex justify-end">
-                                            <button
-                                                onClick={() => syncStatus(trx)}
-                                                disabled={syncingId !== null}
-                                                className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg disabled:opacity-50 transition-colors"
-                                                title="Cek Status ke PG"
-                                            >
-                                                <RefreshCw size={18} className={syncingId === trx.id ? "animate-spin" : ""} />
-                                            </button>
-                                            <button
-                                                onClick={() => setSelected(trx)}
-                                                className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                                                title="Lihat Detail"
-                                            >
-                                                <Eye size={18} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                            {filteredTransactions.length === 0 && (
-                                <tr>
-                                    <td colSpan={5} className="px-5 py-8 text-center text-sm text-slate-500">
-                                        Tidak ada data yang cocok dengan filter pencarian.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                        ))}
+                        {filteredTransactions.length === 0 && (
+                            <tr>
+                                <td colSpan={5}>
+                                    <EmptyState
+                                        icon={Activity}
+                                        title={transactions.length ? "Nggak ada yang cocok" : "Belum ada transaksi"}
+                                        description={transactions.length ? "Coba ubah kata kunci atau filter." : "Transaksi dari merchant bakal muncul di sini."}
+                                        action={filtered ? <Button variant="secondary" size="sm" icon={FilterX} onClick={resetFilters}>Reset filter</Button> : undefined}
+                                    />
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </TableCard>
 
             {selected && (
-                <div className="modal-backdrop fixed inset-0 z-50 bg-black/50 backdrop-blur-sm p-4 flex items-center justify-center" onClick={() => setSelected(null)}>
-                    <div className="modal-panel w-full max-w-4xl bg-white rounded-2xl shadow-2xl p-6 md:p-8 space-y-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-start justify-between gap-4">
+                <Drawer
+                    onClose={() => setSelected(null)}
+                    title="Detail transaksi"
+                    subtitle={<span className="font-mono text-xs break-all">{selected.order_id}</span>}
+                    width="sm:max-w-2xl"
+                    footer={
+                        <Button icon={RefreshCw} loading={syncingId === selected.id} disabled={syncingId !== null} onClick={() => syncStatus(selected)}>
+                            Cek status ke PG
+                        </Button>
+                    }
+                >
+                    <div className="space-y-6">
+                        <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4 flex items-center justify-between gap-4">
                             <div>
-                                <h2 className="text-xl font-black text-slate-900">Detail Transaksi</h2>
-                                <p className="text-sm text-slate-500 mt-1">
-                                    {selected.order_id} - {selected.merchant_name || selected.merchant_id}
-                                </p>
+                                <p className="text-xs text-slate-500">Nominal</p>
+                                <p className="tabular text-2xl font-semibold tracking-tight text-slate-900">{formatRupiah(selected.amount)}</p>
                             </div>
-                            <button onClick={() => setSelected(null)} className="text-slate-500 hover:text-slate-800 font-bold text-sm">
-                                Tutup
-                            </button>
+                            <StatusBadge status={selected.status} />
                         </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                                <p className="text-xs text-slate-500 uppercase font-bold">Gateway Response</p>
-                                <pre className="mt-2 text-xs text-slate-700 overflow-x-auto max-h-56 whitespace-pre-wrap break-all">{selected.pg_response || "-"}</pre>
-                            </div>
-                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                                <p className="text-xs text-slate-500 uppercase font-bold">Client Request Payload</p>
-                                <pre className="mt-2 text-xs text-slate-700 overflow-x-auto max-h-56 whitespace-pre-wrap break-all">{selected.client_payload || "-"}</pre>
-                            </div>
+                        <DetailList items={[
+                            ["Merchant", selected.merchant_name || selected.merchant_id],
+                            ["Gateway", selected.gateway_name || selected.gateway_id || "-"],
+                            ["Metode bayar", <span key="m" className="font-mono">{selected.payment_method}</span>],
+                            ["HTTP dari PG", selected.pg_status_code || "-"],
+                            ["Dibuat", formatDateTime(selected.created_at)],
+                        ]} />
+                        <div className="space-y-3">
+                            <CopyField label="ID transaksi Dupay" value={selected.id} />
+                            {selected.pg_reference_id && <CopyField label="Referensi PG" value={selected.pg_reference_id} />}
+                            {selected.checkout_url && <CopyField label="Checkout URL" value={selected.checkout_url} />}
                         </div>
+                        <JsonBlock title="Request dari merchant" value={selected.client_payload} />
+                        <JsonBlock title="Response gateway" value={selected.pg_response} />
                     </div>
-                </div>
+                </Drawer>
             )}
+        </div>
+    );
+}
+
+function JsonBlock({ title, value }: { title: string; value: string }) {
+    return (
+        <div>
+            <div className="flex items-center justify-between mb-1.5">
+                <p className="text-xs font-medium text-slate-600">{title}</p>
+                {value && (
+                    <button onClick={() => navigator.clipboard?.writeText(value).then(() => toast.success("Disalin"))} className="text-[11px] font-medium text-slate-500 hover:text-slate-900">
+                        Salin
+                    </button>
+                )}
+            </div>
+            <pre className="text-[11px] leading-relaxed font-mono text-slate-200 bg-slate-900 rounded-xl p-4 overflow-x-auto max-h-72 whitespace-pre-wrap break-all">{prettyJSON(value)}</pre>
         </div>
     );
 }
