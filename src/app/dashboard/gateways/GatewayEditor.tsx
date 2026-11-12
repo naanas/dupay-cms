@@ -13,6 +13,7 @@ import {
 type WebhookForm = {
     order_id_path: string;
     status_path: string;
+    amount_path: string;
     success: string; // dipisah koma
     failed: string;
     refunded: string;
@@ -61,11 +62,12 @@ const hasChannels = (raw: string) => {
 
 const fromGateway = (gw: GatewayRecord | null): FormState => {
     const wm = parseJsonObject(gw?.webhook_mapping || '{}');
-    const { order_id_path, status_path, success_statuses, failed_statuses, refunded_statuses, ...extra } = wm;
+    const { order_id_path, status_path, amount_path, success_statuses, failed_statuses, refunded_statuses, ...extra } = wm;
     const endpoints = gw ? endpointsFromGateway(gw) : [];
     const webhook: WebhookForm = {
         order_id_path: typeof order_id_path === 'string' ? order_id_path : '',
         status_path: typeof status_path === 'string' ? status_path : '',
+        amount_path: typeof amount_path === 'string' ? amount_path : '',
         success: listToText(success_statuses),
         failed: listToText(failed_statuses),
         refunded: listToText(refunded_statuses),
@@ -157,6 +159,7 @@ export default function GatewayEditor({ gateway, onBack, onSaved }: Props) {
                 ...form.webhook.extra,
                 order_id_path: form.webhook.order_id_path.trim(),
                 status_path: form.webhook.status_path.trim(),
+                ...(form.webhook.amount_path.trim() ? { amount_path: form.webhook.amount_path.trim() } : {}),
                 success_statuses: textToList(form.webhook.success),
                 failed_statuses: textToList(form.webhook.failed),
                 refunded_statuses: textToList(form.webhook.refunded),
@@ -435,6 +438,11 @@ export default function GatewayEditor({ gateway, onBack, onSaved }: Props) {
                                     <label className={labelCls}>Lokasi status</label>
                                     <input className={`${inputCls} mt-1 font-mono`} placeholder="mis. status / transaction_status" value={form.webhook.status_path} onChange={e => setWebhook({ status_path: e.target.value })} />
                                 </div>
+                                <div>
+                                    <label className={labelCls}>Lokasi nominal dibayar (opsional, disarankan)</label>
+                                    <input className={`${inputCls} mt-1 font-mono`} placeholder="mis. total_amount / total" value={form.webhook.amount_path} onChange={e => setWebhook({ amount_path: e.target.value })} />
+                                    <p className={hintCls}>Kalau diisi, callback BERHASIL dengan nominal lebih kecil dari transaksi ditolak.</p>
+                                </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                                 {([
@@ -462,7 +470,7 @@ export default function GatewayEditor({ gateway, onBack, onSaved }: Props) {
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-1">
                                         <select className={inputCls} value={form.webhook_validation_type} onChange={e => set({ webhook_validation_type: e.target.value })}>
-                                            <option value="">Nggak diverifikasi (siapa pun bisa kirim callback palsu)</option>
+                                            <option value="">Tanpa token: status dicek ulang ke PG lewat endpoint Cek Status (wajib ada)</option>
                                             <option value="TOKEN_MATCH">Cocokkan token rahasia</option>
                                         </select>
                                         {form.webhook_validation_type === 'TOKEN_MATCH' && (

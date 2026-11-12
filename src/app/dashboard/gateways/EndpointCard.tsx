@@ -49,7 +49,7 @@ const leafCount = (obj: unknown): number =>
         ? Object.values(obj as Record<string, unknown>).reduce<number>((n, v) => n + (v !== null && typeof v === 'object' ? (Array.isArray(v) ? 0 : leafCount(v)) : 1), 0)
         : 0;
 
-const PLACEHOLDERS = ['{{order_id}}', '{{amount}}', '{{payment_method}}', '{{pg_reference_id}}', '{{merchant_code}}'];
+const PLACEHOLDERS = ['{{order_id}}', '{{amount}}', '{{payment_method}}', '{{pg_reference_id}}', '{{merchant_code}}', '{{expired_time}}', '{{expired_minutes}}'];
 
 const preview = (v: unknown) => {
     if (v === undefined) return null;
@@ -303,6 +303,7 @@ export default function EndpointCard({
                             </div>
                             <p className="text-[10px] text-slate-400 mt-1">
                                 <code>{'"{{amount}}"'}</code> pakai tanda kutip, nanti jadi angka. <code>{'{{payment_method}}'}</code> = kode channel di PG.
+                                {' '}<code>{'{{expired_time}}'}</code> = batas bayar (unix detik), <code>{'{{expired_minutes}}'}</code> = menit dari sekarang (dari merchant, default 24 jam).
                             </p>
                         </>
                     )}
